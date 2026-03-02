@@ -125,17 +125,17 @@ async def search_documents(
     return RAGSearchResponse(results=results)
 
 
-@router.delete("/collections/{name}/documents/{source}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/collections/{name}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
     name: str,
-    source: str,
+    document_id: str,
     ingestion_service: IngestionSvc,
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
 ):
-    """Delete a specific document (by source name/ID) from a collection."""
-    success = await ingestion_service.remove_document(name, source)
+    """Delete a specific document by its ID from a collection."""
+    success = await ingestion_service.remove_document(name, document_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete document")
     return None # Correct for 204

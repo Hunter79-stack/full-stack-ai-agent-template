@@ -52,6 +52,9 @@ class DocumentParser(BaseModel):
 class RAGSettings(BaseModel):
     """Constants and variables used to setup the RAG features."""
     
+    # Collection
+    collection_name: str = "documents"
+    
     # Documents
     allowed_extensions: list[DocumentExtensions] = Field(default_factory=lambda: list(DocumentExtensions))
     
