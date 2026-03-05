@@ -678,12 +678,12 @@ def prompt_llm_provider(ai_framework: AIFrameworkType) -> LLMProviderType:
 
 def prompt_langsmith() -> bool:
     """Prompt for LangSmith observability."""
-    return _check_cancelled(
+    return cast(bool, _check_cancelled(
         questionary.confirm(
             "Enable LangSmith observability (tracing, prompt management)?",
             default=False,
         ).ask()
-    )
+    ))
 
 
 def prompt_websocket_auth(auth: AuthType) -> WebSocketAuthType:
