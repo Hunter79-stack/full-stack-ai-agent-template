@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-03-05
+
+### Added
+
+- **LangSmith observability integration** - New `enable_langsmith` option for LangChain, LangGraph, and DeepAgents frameworks. Adds `LANGCHAIN_TRACING_V2`, `LANGCHAIN_API_KEY`, `LANGCHAIN_PROJECT`, `LANGCHAIN_ENDPOINT` settings and `langsmith` dependency when enabled. Includes interactive prompt, `--langsmith` CLI flag, and auto-enable in `ai-agent` preset. Previously LangSmith env vars were hardcoded to appear with LangChain — now requires explicit opt-in and works with all 3 LangChain-ecosystem frameworks.
+
+### Fixed
+
+#### Backend Template Fixes
+
+- **Unconditional `import logfire` in `versioning.py`** - Replaced with `logging` module to prevent `ImportError` when Logfire is disabled
+- **Unconditional `import logfire` in `webhook.py`** - Replaced `logfire.error()`/`logfire.info()` with `logger.error()`/`logger.info()` in all 3 database sections (PostgreSQL, SQLite, MongoDB) to prevent `ImportError` when Logfire is disabled but webhooks are enabled
+
+#### Frontend Template Fixes
+
+- **Sidebar "Chat" link visible without AI agent** - Chat navigation item now conditional on `enable_ai_agent`
+- **Frontend chat files not cleaned up** - Post-generation hook now removes chat page, components, hooks, types, and stores when `enable_ai_agent=False`
+- **Chat component exports unconditional** - `chat/index.ts` exports now wrapped in `enable_ai_agent` conditional
+- **Chat hook exports unconditional** - `hooks/index.ts` exports for `useWebSocket`, `useChat`, `useLocalChat` now conditional on `enable_ai_agent`
+- **`WS_URL` and `ROUTES.CHAT` always defined** - `constants.ts` now conditionally defines WebSocket URL and chat route only when AI agent is enabled
+
 ## [0.2.0] - 2026-02-27
 
 ### Changed

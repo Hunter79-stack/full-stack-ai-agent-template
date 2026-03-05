@@ -99,4 +99,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 {%- if cookiecutter.enable_logfire %}
 LOGFIRE_TOKEN=your-token
 {%- endif %}
+{%- if cookiecutter.enable_langsmith %}
+LANGCHAIN_API_KEY=your-api-key
+{%- endif %}
 ```

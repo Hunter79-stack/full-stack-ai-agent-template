@@ -178,6 +178,7 @@ def new(output: Path | None, no_input: bool, name: str | None) -> None:
 @click.option("--prometheus", is_flag=True, help="Enable Prometheus metrics")
 @click.option("--file-storage", is_flag=True, help="Enable S3/MinIO file storage")
 @click.option("--webhooks", is_flag=True, help="Enable webhooks support")
+@click.option("--langsmith", is_flag=True, help="Enable LangSmith observability (LangChain/LangGraph/DeepAgents)")
 @click.option(
     "--python-version",
     type=click.Choice(["3.11", "3.12", "3.13"]),
@@ -225,6 +226,7 @@ def create(
     prometheus: bool,
     file_storage: bool,
     webhooks: bool,
+    langsmith: bool,
     python_version: str,
     i18n: bool,
     preset: str | None,
@@ -268,6 +270,7 @@ def create(
                 llm_provider=LLMProviderType(llm_provider),
                 enable_websockets=True,
                 enable_conversation_persistence=True,
+                enable_langsmith=ai_framework in ("langchain", "langgraph", "deepagents"),
                 enable_docker=True,
                 ci_type=CIType.GITHUB,
                 generate_env=not no_env,
@@ -332,6 +335,7 @@ def create(
                 enable_prometheus=prometheus,
                 enable_file_storage=file_storage,
                 enable_webhooks=webhooks,
+                enable_langsmith=langsmith,
                 python_version=python_version,
                 enable_i18n=i18n,
             )

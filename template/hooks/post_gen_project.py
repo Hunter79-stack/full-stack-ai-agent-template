@@ -44,6 +44,7 @@ use_gitlab_ci = "{{ cookiecutter.use_gitlab_ci }}" == "True"
 enable_kubernetes = "{{ cookiecutter.enable_kubernetes }}" == "True"
 use_nginx = "{{ cookiecutter.use_nginx }}" == "True"
 enable_logfire = "{{ cookiecutter.enable_logfire }}" == "True"
+enable_langsmith = "{{ cookiecutter.enable_langsmith }}" == "True"
 
 
 def remove_file(path: str) -> None:
@@ -90,6 +91,22 @@ if not enable_ai_agent:
     # Remove entire agents directory when AI is disabled
     remove_dir(os.path.join(backend_app, "agents"))
     remove_file(os.path.join(backend_app, "api", "routes", "v1", "agent.py"))
+
+    # Remove frontend chat files when AI is disabled
+    if use_frontend:
+        frontend_src = os.path.join(os.getcwd(), "frontend", "src")
+        remove_dir(os.path.join(frontend_src, "components", "chat"))
+        remove_file(os.path.join(frontend_src, "hooks", "use-chat.ts"))
+        remove_file(os.path.join(frontend_src, "hooks", "use-local-chat.ts"))
+        remove_file(os.path.join(frontend_src, "hooks", "use-websocket.ts"))
+        remove_file(os.path.join(frontend_src, "types", "chat.ts"))
+        remove_file(os.path.join(frontend_src, "stores", "chat-store.ts"))
+        remove_file(os.path.join(frontend_src, "stores", "local-chat-store.ts"))
+        # Remove chat page route
+        if enable_i18n:
+            remove_dir(os.path.join(frontend_src, "app", "[locale]", "(dashboard)", "chat"))
+        else:
+            remove_dir(os.path.join(frontend_src, "app", "(dashboard)", "chat"))
 else:
     # Remove framework-specific files based on selection
     if not use_pydantic_ai:
