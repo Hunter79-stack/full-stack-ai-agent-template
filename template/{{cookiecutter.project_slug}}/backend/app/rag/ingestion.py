@@ -1,5 +1,8 @@
 {%- if cookiecutter.enable_rag %}
+from __future__ import annotations
+
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 from app.rag.models import IngestionResult, IngestionStatus, Document
@@ -19,7 +22,7 @@ class IngestionService:
         self,
         processor: DocumentProcessor,
         vector_store: BaseVectorStore,
-        on_event: callable | None = None,
+        on_event: Callable | None = None,
     ):
         self.processor = processor
         self.store = vector_store

@@ -489,15 +489,17 @@ if os.path.exists(backend_dir):
 
     if ruff_cmd:
         print(f"Running ruff to format code (using: {' '.join(ruff_cmd)})...")
-        # Run ruff check --fix to auto-fix issues
+        # Run ruff check --fix to auto-fix issues (suppress output)
         subprocess.run(
             [*ruff_cmd, "check", "--fix", "--quiet", backend_dir],
             check=False,
+            capture_output=True,
         )
-        # Run ruff format for consistent formatting
+        # Run ruff format for consistent formatting (suppress output)
         subprocess.run(
             [*ruff_cmd, "format", "--quiet", backend_dir],
             check=False,
+            capture_output=True,
         )
         print("Code formatting complete.")
     else:

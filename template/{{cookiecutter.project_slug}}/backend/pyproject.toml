@@ -85,9 +85,9 @@ dependencies = [
 {%- endif %}
 {%- if cookiecutter.enable_admin_panel %}
     "sqladmin>=0.19.0",
-{%- if cookiecutter.admin_require_auth %}
-    "itsdangerous>=2.2.0",
 {%- endif %}
+{%- if (cookiecutter.enable_admin_panel and cookiecutter.admin_require_auth) or cookiecutter.enable_oauth %}
+    "itsdangerous>=2.2.0",
 {%- endif %}
 {%- if cookiecutter.use_celery %}
     "celery[redis]>=5.4.0",
@@ -275,7 +275,11 @@ select = [
 ]
 ignore = [
     "E501", # line too long (handled by formatter)
+    "E402", # module level import not at top (needed for conditional Jinja2 imports)
     "B008", # function call in default argument (needed for FastAPI Depends)
+    "B905", # zip() without strict= (Python 3.10+ style, not needed)
+    "RUF012", # mutable class attribute without ClassVar (used in parser base class)
+    "RUF059", # unpacked variable never used (CLI destructuring pattern)
 ]
 
 [tool.ruff.lint.isort]

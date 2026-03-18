@@ -465,10 +465,10 @@ class TestRAGWithRerankers:
 class TestRAGWithPDFParsers:
     """Tests for RAG with different PDF parsers."""
 
-    def test_rag_with_pdfplumber(self, tmp_path) -> None:
-        """Test RAG with pdfplumber parser."""
+    def test_rag_with_pymupdf(self, tmp_path) -> None:
+        """Test RAG with PyMuPDF parser."""
         config = ProjectConfig(
-            project_name="rag_pdfplumber",
+            project_name="rag_pymupdf",
             database=DatabaseType.POSTGRESQL,
             auth=AuthType.JWT,
             background_tasks=BackgroundTaskType.CELERY,

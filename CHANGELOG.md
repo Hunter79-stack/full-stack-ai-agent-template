@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **RAG integration** - Full RAG pipeline: document parsing → chunking → embedding → vector store → retrieval. Integrated with all 5 AI frameworks as `search_knowledge_base` tool
 - **4 vector store backends** - Milvus (Docker), Qdrant (Docker), ChromaDB (embedded), pgvector (PostgreSQL extension). Selected via `vector_store` config option
 - **4 embedding providers** - OpenAI (`text-embedding-3-small`), Voyage (`voyage-3`), Google Gemini (`gemini-embedding-exp-03-07`, multimodal), SentenceTransformers (`all-MiniLM-L6-v2`)
-- **Document parsers** - pdfplumber (PDF text), PyMuPDF (PDF text + images), LlamaParse (130+ formats via cloud API, configurable tier), python-docx (DOCX), native (TXT/MD)
+- **Document parsers** - PyMuPDF (PDF text + tables + headers/footers + images + OCR), LlamaParse (130+ formats via cloud API, configurable tier), python-docx (DOCX), native (TXT/MD)
 - **Image description** - Optional extraction of images from documents via PyMuPDF + LLM vision API description (OpenAI GPT-4o / Anthropic Claude / Gemini / OpenRouter). Opt-in via `enable_rag_image_description`
 - **Chunking strategies** - 3 strategies: `recursive` (default), `markdown` (split by headers), `fixed` (simple fixed-size). Configurable via `RAG_CHUNKING_STRATEGY` env var
 - **Hybrid search** - BM25 keyword search + vector similarity search with Reciprocal Rank Fusion (RRF). Enable via `RAG_HYBRID_SEARCH=true`
@@ -80,7 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hardcoded `/tmp/rag_uploads`** - Fixed: `tempfile.gettempdir()`
 - **Inconsistent frontend auth** - Fixed: all RAG routes use `NEXT_PUBLIC_AUTH_ENABLED` pattern
 - **Inline `import logging` in routes** - Fixed: moved to module level
-- **Unconditional pdfplumber import** - Fixed: conditional on `not use_llamaparse`
+- **Unconditional PDF parser import** - Fixed: conditional on `not use_llamaparse`
 - **Chat page not removed when i18n disabled** - Fixed: remove both `[locale]/` and direct paths
 - **`stores/index.ts` unconditional chat exports** - Fixed: gated behind `enable_ai_agent`
 - **`types/index.ts` unconditional chat export** - Fixed: gated behind `enable_ai_agent`

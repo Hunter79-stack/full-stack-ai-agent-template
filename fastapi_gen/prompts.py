@@ -25,6 +25,7 @@ from .config import (
     RAGFeatures,
     RateLimitStorageType,
     ReverseProxyType,
+    VectorStoreType,
     WebSocketAuthType,
 )
 
@@ -477,25 +478,8 @@ def prompt_rate_limit_config(redis_enabled: bool) -> tuple[int, int, RateLimitSt
         ).ask()
     )
 
-    # Build storage choices based on whether Redis is enabled
-    storage_choices = [
-        questionary.Choice("Memory (single instance)", value=RateLimitStorageType.MEMORY),
-    ]
-    if redis_enabled:
-        storage_choices.append(
-            questionary.Choice("Redis (distributed)", value=RateLimitStorageType.REDIS)
-        )
-
-    storage = cast(
-        RateLimitStorageType,
-        _check_cancelled(
-            questionary.select(
-                "Storage backend:",
-                choices=storage_choices,
-                default=storage_choices[0],
-            ).ask()
-        ),
-    )
+    # Auto-select storage: Redis when available, otherwise memory
+    storage = RateLimitStorageType.REDIS if redis_enabled else RateLimitStorageType.MEMORY
 
     return int(requests_str), int(period_str), storage
 
@@ -712,9 +696,22 @@ def prompt_rag_config() -> RAGFeatures:
     enable_google_drive_ingestion = False
     enable_reranker = False
     pdf_parser = PdfParserType.PYMUPDF
+    vector_store = VectorStoreType.MILVUS
 
     # In RAG is enabled, ask for features
     if enable_rag:
+        vector_store_choice = questionary.select(
+            "Select vector store backend:",
+            choices=[
+                questionary.Choice("Milvus (production, Docker required)", value=VectorStoreType.MILVUS),
+                questionary.Choice("Qdrant (production, Docker required)", value=VectorStoreType.QDRANT),
+                questionary.Choice("ChromaDB (embedded, no Docker needed)", value=VectorStoreType.CHROMADB),
+                questionary.Choice("pgvector (uses existing PostgreSQL)", value=VectorStoreType.PGVECTOR),
+            ],
+            default=VectorStoreType.MILVUS,
+        ).ask()
+        vector_store = VectorStoreType(vector_store_choice)
+
         enable_google_drive_ingestion = questionary.confirm(
             "Enable Google Drive document ingestion?", default=False
         ).ask()
@@ -742,6 +739,7 @@ def prompt_rag_config() -> RAGFeatures:
 
     return RAGFeatures(
         enable_rag=enable_rag,
+        vector_store=vector_store,
         enable_google_drive_ingestion=enable_google_drive_ingestion,
         enable_reranker=enable_reranker,
         pdf_parser=pdf_parser,
@@ -773,13 +771,16 @@ def prompt_websocket_auth(auth: AuthType) -> WebSocketAuthType:
             questionary.Choice("API Key required (query param)", value=WebSocketAuthType.API_KEY)
         )
 
+    # Default to JWT/API Key when available, otherwise None
+    default_choice = choices[-1] if len(choices) > 1 else choices[0]
+
     return cast(
         WebSocketAuthType,
         _check_cancelled(
             questionary.select(
                 "Select WebSocket authentication:",
                 choices=choices,
-                default=choices[0],
+                default=default_choice,
             ).ask()
         ),
     )

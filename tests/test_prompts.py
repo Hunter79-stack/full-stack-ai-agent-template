@@ -21,6 +21,7 @@ from fastapi_gen.config import (
     RAGFeatures,
     RateLimitStorageType,
     ReverseProxyType,
+    VectorStoreType,
     WebSocketAuthType,
 )
 from fastapi_gen.prompts import (
@@ -580,11 +581,6 @@ class TestPromptRateLimitConfig:
         mock_text.ask.side_effect = ["50", "30"]
         mock_questionary.text.return_value = mock_text
 
-        mock_select = MagicMock()
-        mock_select.ask.return_value = RateLimitStorageType.MEMORY
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
-
         requests, period, storage = prompt_rate_limit_config(redis_enabled=False)
 
         assert requests == 50
@@ -592,16 +588,11 @@ class TestPromptRateLimitConfig:
         assert storage == RateLimitStorageType.MEMORY
 
     @patch("fastapi_gen.prompts.questionary")
-    def test_returns_redis_storage_when_redis_enabled(self, mock_questionary: MagicMock) -> None:
-        """Test Redis storage can be selected when Redis is enabled."""
+    def test_auto_selects_redis_when_enabled(self, mock_questionary: MagicMock) -> None:
+        """Test Redis storage is auto-selected when Redis is enabled."""
         mock_text = MagicMock()
         mock_text.ask.side_effect = ["100", "60"]
         mock_questionary.text.return_value = mock_text
-
-        mock_select = MagicMock()
-        mock_select.ask.return_value = RateLimitStorageType.REDIS
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
 
         requests, period, storage = prompt_rate_limit_config(redis_enabled=True)
 
@@ -610,42 +601,17 @@ class TestPromptRateLimitConfig:
         assert storage == RateLimitStorageType.REDIS
 
     @patch("fastapi_gen.prompts.questionary")
-    def test_redis_option_not_shown_when_redis_disabled(self, mock_questionary: MagicMock) -> None:
-        """Test Redis storage option is not shown when Redis is disabled."""
+    def test_auto_selects_memory_when_redis_disabled(self, mock_questionary: MagicMock) -> None:
+        """Test memory storage is auto-selected when Redis is disabled."""
         mock_text = MagicMock()
         mock_text.ask.side_effect = ["100", "60"]
         mock_questionary.text.return_value = mock_text
 
-        mock_select = MagicMock()
-        mock_select.ask.return_value = RateLimitStorageType.MEMORY
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
+        _, _, storage = prompt_rate_limit_config(redis_enabled=False)
 
-        prompt_rate_limit_config(redis_enabled=False)
-
-        # Check that select was called with only one choice (Memory)
-        select_call = mock_questionary.select.call_args
-        choices = select_call[1]["choices"]
-        assert len(choices) == 1
-
-    @patch("fastapi_gen.prompts.questionary")
-    def test_redis_option_shown_when_redis_enabled(self, mock_questionary: MagicMock) -> None:
-        """Test Redis storage option is shown when Redis is enabled."""
-        mock_text = MagicMock()
-        mock_text.ask.side_effect = ["100", "60"]
-        mock_questionary.text.return_value = mock_text
-
-        mock_select = MagicMock()
-        mock_select.ask.return_value = RateLimitStorageType.MEMORY
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
-
-        prompt_rate_limit_config(redis_enabled=True)
-
-        # Check that select was called with two choices (Memory and Redis)
-        select_call = mock_questionary.select.call_args
-        choices = select_call[1]["choices"]
-        assert len(choices) == 2
+        assert storage == RateLimitStorageType.MEMORY
+        # No select prompt should be called for storage
+        mock_questionary.select.assert_not_called()
 
     @patch("fastapi_gen.prompts.questionary")
     def test_raises_on_cancel(self, mock_questionary: MagicMock) -> None:
@@ -2100,14 +2066,15 @@ class TestPromptRAGConfig:
         mock_confirm.ask.side_effect = [True, False, False]
         mock_questionary.confirm.return_value = mock_confirm
 
-        # Mock the PDF parser selection (shown when RAG is enabled)
+        # Mock vector store + PDF parser selections
         mock_select = MagicMock()
-        mock_select.ask.return_value = PdfParserType.PYMUPDF
+        mock_select.ask.side_effect = [VectorStoreType.MILVUS, PdfParserType.PYMUPDF]
         mock_questionary.select.return_value = mock_select
 
         result = prompt_rag_config()
 
         assert result.enable_rag is True
+        assert result.vector_store == VectorStoreType.MILVUS
         assert result.enable_google_drive_ingestion is False
         assert result.enable_reranker is False
 
@@ -2115,12 +2082,11 @@ class TestPromptRAGConfig:
     def test_rag_enabled_with_google_drive(self, mock_questionary: MagicMock) -> None:
         """Test RAG enabled with Google Drive ingestion."""
         mock_confirm = MagicMock()
-        mock_confirm.ask.side_effect = [True, True, False]  # RAG, Google Drive, no reranker
+        mock_confirm.ask.side_effect = [True, True, False]
         mock_questionary.confirm.return_value = mock_confirm
 
-        # Mock the PDF parser selection (shown when RAG is enabled)
         mock_select = MagicMock()
-        mock_select.ask.return_value = PdfParserType.PYMUPDF
+        mock_select.ask.side_effect = [VectorStoreType.MILVUS, PdfParserType.PYMUPDF]
         mock_questionary.select.return_value = mock_select
 
         result = prompt_rag_config()
@@ -2133,37 +2099,35 @@ class TestPromptRAGConfig:
     def test_rag_enabled_with_reranker(self, mock_questionary: MagicMock) -> None:
         """Test RAG enabled with reranker."""
         mock_confirm = MagicMock()
-        mock_confirm.ask.side_effect = [True, False, True]  # RAG, no Google Drive, reranker
+        mock_confirm.ask.side_effect = [True, False, True]
         mock_questionary.confirm.return_value = mock_confirm
 
-        # Mock the PDF parser selection (shown when RAG is enabled)
         mock_select = MagicMock()
-        mock_select.ask.return_value = PdfParserType.PYMUPDF
+        mock_select.ask.side_effect = [VectorStoreType.QDRANT, PdfParserType.PYMUPDF]
         mock_questionary.select.return_value = mock_select
 
         result = prompt_rag_config()
 
         assert result.enable_rag is True
-        assert result.enable_google_drive_ingestion is False
+        assert result.vector_store == VectorStoreType.QDRANT
         assert result.enable_reranker is True
 
     @patch("fastapi_gen.prompts.questionary")
     def test_rag_enabled_with_all_features(self, mock_questionary: MagicMock) -> None:
         """Test RAG enabled with all features."""
         mock_confirm = MagicMock()
-        mock_confirm.ask.side_effect = [True, True, True]  # RAG, Google Drive, reranker
+        mock_confirm.ask.side_effect = [True, True, True]
         mock_questionary.confirm.return_value = mock_confirm
 
-        # Mock the PDF parser selection (shown when RAG is enabled)
         mock_select = MagicMock()
-        mock_select.ask.return_value = PdfParserType.PYMUPDF
+        mock_select.ask.side_effect = [VectorStoreType.CHROMADB, PdfParserType.LLAMAPARSE]
         mock_questionary.select.return_value = mock_select
 
         result = prompt_rag_config()
 
         assert result.enable_rag is True
-        assert result.enable_google_drive_ingestion is True
-        assert result.enable_reranker is True
+        assert result.vector_store == VectorStoreType.CHROMADB
+        assert result.pdf_parser == PdfParserType.LLAMAPARSE
 
     @patch("fastapi_gen.prompts.console")
     @patch("fastapi_gen.prompts.questionary")

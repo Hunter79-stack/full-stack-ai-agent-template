@@ -311,8 +311,8 @@ class TestRAGCookiecutterContext:
         assert context["use_llamaparse"] is True
         assert context["use_python_parser"] is True  # Always True for non-PDF
 
-    def test_pdfplumber_document_parser_context_flags(self) -> None:
-        """Test pdfplumber document parser sets correct context flags."""
+    def test_pymupdf_document_parser_context_flags(self) -> None:
+        """Test PyMuPDF document parser sets correct context flags."""
         config = ProjectConfig(
             project_name="test",
             enable_ai_agent=True,

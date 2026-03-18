@@ -178,10 +178,10 @@ Generated projects include **CLAUDE.md** and **AGENTS.md** files optimized for A
 │  │                                                                  │     │
 │  │  Sources        Parse           Chunk          Embed             │     │
 │  │  ─────────      ──────────      ──────────     ──────────────    │     │
-│  │  Local files    pdfplumber      recursive      OpenAI            │     │
-│  │  Google Drive   PyMuPDF+LLM     markdown       Voyage            │     │
-│  │  S3/MinIO       LlamaParse      fixed          Gemini (multi)    │     │
-│  │                 python-docx                     SentenceTransf.   │     │
+│  │  Local files    PyMuPDF         recursive      OpenAI            │     │
+│  │  Google Drive   LlamaParse      markdown       Voyage            │     │
+│  │  S3/MinIO       python-docx     fixed          Gemini (multi)    │     │
+│  │                                                SentenceTransf.   │     │
 │  │                                                                  │     │
 │  │  Store              Search              Rank                     │     │
 │  │  ──────────────     ──────────────      ──────────────           │     │
@@ -582,7 +582,7 @@ uv run my_app rag-sync-s3 --collection docs --prefix reports/ --bucket my-bucket
 
 ### Features
 
-- **Document parsing** - PDF (pdfplumber/PyMuPDF), DOCX, TXT, MD + 130+ formats via LlamaParse
+- **Document parsing** - PDF (PyMuPDF with tables, headers/footers, OCR), DOCX, TXT, MD + 130+ formats via LlamaParse
 - **Image description** - Extract images from documents, describe via LLM vision API (opt-in)
 - **Chunking** - RecursiveCharacterTextSplitter with configurable size/overlap
 - **Reranking** - Cohere API or local CrossEncoder for improved search quality

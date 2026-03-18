@@ -25,9 +25,9 @@ class BaseDocumentParser(ABC):
     Defines the interface that all document parsers must implement.
     Supports parsing of various document formats (PDF, DOCX, TXT, MD).
     """
-    
+
     allowed = [f"{ext.value}" for ext in DocumentExtensions]
-    
+
     def is_file_existing(self, filepath: Path) -> bool:
         """Check if file exists at the given path.
         Args:
@@ -36,7 +36,7 @@ class BaseDocumentParser(ABC):
             True if the file exists, False otherwise.
         """
         return Path.exists(filepath)
-    
+
     def is_extension_allowed(self, filepath: Path) -> bool:
         """Check whether document extension is allowed for parsing.
         Args:
@@ -45,7 +45,7 @@ class BaseDocumentParser(ABC):
             True if the extension is supported and file exists.
         """
         return filepath.suffix.lower() in self.allowed and self.is_file_existing(filepath)
-    
+
     def get_document_metadata(self, filepath: Path) -> DocumentMetadata:
         """Collect metadata about a given document.
         Args:
@@ -62,7 +62,7 @@ class BaseDocumentParser(ABC):
             source_path=str(filepath.resolve()),
             content_hash=content_hash,
         )
-    
+
     @abstractmethod
     def parse(self, filepath: Path) -> Document:
         """Parse a file and read its content into a Document object.
@@ -79,7 +79,7 @@ class TextDocumentParser(BaseDocumentParser):
     Uses Python's built-in file reading capabilities to extract
     text content from plain text and Markdown files.
     """
-    
+
     def _parse_text_file(self, filepath: Path) -> Document:
         """Extract raw text from a TXT or MD file.
         Args:
@@ -92,27 +92,27 @@ class TextDocumentParser(BaseDocumentParser):
                 page_num=1,
                 content=f.read()
             )
-            
+
         return Document(
-            pages=[page], 
+            pages=[page],
             metadata=self.get_document_metadata(filepath)
         )
-    
+
     async def parse(self, filepath: Path) -> Document:
         """Parse a text file (TXT or MD).
-        
+
         Args:
             filepath: Path to the text file.
-            
+
         Returns:
             Document object with parsed content.
-            
+
         Raises:
             ValueError: If the file extension is not supported.
         """
         if not self.is_extension_allowed(filepath):
             raise ValueError(f"Extension {filepath.suffix} not supported by TextDocumentParser")
-        
+
         if filepath.suffix in (".txt", ".md"):
             return self._parse_text_file(filepath)
         else:
@@ -248,8 +248,9 @@ class PyMuPDFParser(BaseDocumentParser):
             logger.warning(f"LLM OCR failed for page {page.number + 1}: {e}")
             return ""
 
+{%- if cookiecutter.enable_rag_image_description %}
     def _extract_images(self, doc, page) -> list:
-        """Extract images from page."""
+        """Extract images from page for LLM description."""
         images = []
         for img_info in page.get_images(full=True):
             xref = img_info[0]
@@ -258,16 +259,15 @@ class PyMuPDFParser(BaseDocumentParser):
                 if base and base["image"] and len(base["image"]) > 1000:
                     ext = base.get("ext", "png")
                     mime_map = {"png": "image/png", "jpeg": "image/jpeg", "jpg": "image/jpeg"}
-{%- if cookiecutter.enable_rag_image_description %}
                     images.append(DocumentImage(
                         page_num=page.number + 1,
                         image_bytes=base["image"],
                         mime_type=mime_map.get(ext, f"image/{ext}"),
                     ))
-{%- endif %}
             except Exception:
                 pass
         return images
+{%- endif %}
 
     def _parse_pdf_file(self, filepath: Path) -> Document:
         """Parse PDF with smart extraction pipeline."""
@@ -297,8 +297,10 @@ class PyMuPDFParser(BaseDocumentParser):
                     text = ocr_text
                     logger.info(f"OCR fallback used for page {page.number + 1}")
 
+{%- if cookiecutter.enable_rag_image_description %}
             # 4. Images
             images = self._extract_images(doc, page)
+{%- endif %}
 
             pages.append(DocumentPage(
                 page_num=page.number + 1,
@@ -398,12 +400,12 @@ class LlamaParseParser(BaseDocumentParser):
 
 class DocumentProcessor:
     """Orchestrates parsing and chunking of files into Document objects.
-    
+
     Manages the document processing pipeline:
     1. Route to appropriate parser based on file extension
     2. Parse document content
     3. Chunk document pages using RecursiveCharacterTextSplitter
-    
+
 {%- if cookiecutter.use_llamaparse %}
     Supported file types:
     - TXT, MD: TextDocumentParser (Python native)
@@ -589,7 +591,7 @@ class DocumentProcessor:
                     **page.model_dump(
                         exclude={"parent_doc_id"}
                     )))
-        
+
         # Add chunked pages to original document
         document.chunked_pages = chunked_pages
         return document

@@ -19,6 +19,7 @@ from .config import (
     PdfParserType,
     ProjectConfig,
     RAGFeatures,
+    VectorStoreType,
     WebSocketAuthType,
 )
 from .generator import generate_project, post_generation_tasks
@@ -223,6 +224,12 @@ def new(output: Path | None, no_input: bool, name: str | None) -> None:
     help="Enable RAG feature.",
 )
 @click.option(
+    "--vector-store",
+    type=click.Choice(["milvus", "qdrant", "chromadb", "pgvector"]),
+    default="milvus",
+    help="Vector store backend (default: milvus)",
+)
+@click.option(
     "--gdrive-rag",
     is_flag=True,
     default=False,
@@ -280,6 +287,7 @@ def create(
     python_version: str,
     i18n: bool,
     rag: bool,
+    vector_store: str,
     gdrive_rag: bool,
     reranker: str,
     pdf_parser: str,
@@ -395,6 +403,7 @@ def create(
                 enable_i18n=i18n,
                 rag_features=RAGFeatures(
                     enable_rag=rag,
+                    vector_store=VectorStoreType(vector_store),
                     enable_google_drive_ingestion=gdrive_rag,
                     enable_reranker=(reranker != "none"),
                     pdf_parser=PdfParserType(pdf_parser),
@@ -486,10 +495,11 @@ def templates() -> None:
     console.print()
 
     console.print("[bold]RAG (Retrieval Augmented Generation):[/]")
-    console.print("  --rag              Enable RAG")
-    console.print("  --gdrive-rag       Enable Google Drive ingestion for RAG")
-    console.print("  --reranker         Enable reranker logic")
-    console.print("  --document-parser  Choose document parser")
+    console.print("  --rag                               Enable RAG")
+    console.print("  --vector-store milvus|qdrant|chromadb|pgvector  Vector store backend")
+    console.print("  --gdrive-rag                        Enable Google Drive ingestion")
+    console.print("  --reranker none|cohere|cross_encoder Reranker logic")
+    console.print("  --pdf-parser pymupdf|llamaparse     PDF parser")
     console.print()
 
     console.print("[bold]Integrations:[/]")

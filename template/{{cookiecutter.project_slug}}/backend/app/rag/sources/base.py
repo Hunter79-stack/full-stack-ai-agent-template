@@ -1,7 +1,13 @@
 {%- if cookiecutter.enable_rag %}
 """Base class for RAG document source connectors."""
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.rag.ingestion import IngestionService
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
