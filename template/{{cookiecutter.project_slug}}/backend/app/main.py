@@ -137,7 +137,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[{% if cookiecutter.enable_red
     if "embedding_service" in state:
         try:
             vector_store = MilvusVectorStore(settings=settings.rag, embedding_service=embedder)
-            await vector_store.client.list_collections()  # type: ignore[attr-defined]
+            await vector_store.client.list_collections()
             state["vector_store"] = vector_store
         except Exception as e:
             logger.error(f"Milvus connection failed: {e}. Vector store will not be available.")

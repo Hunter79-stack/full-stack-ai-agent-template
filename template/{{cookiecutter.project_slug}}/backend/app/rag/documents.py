@@ -246,9 +246,9 @@ class PyMuPDFParser(BaseDocumentParser):
             image_bytes = pix.tobytes("png")
             loop = asyncio.new_event_loop()
             try:
-                return loop.run_until_complete(
+                return str(loop.run_until_complete(
                     image_describer.describe(image_bytes, "image/png")
-                )
+                ))
             finally:
                 loop.close()
         except Exception as e:
@@ -278,7 +278,7 @@ class PyMuPDFParser(BaseDocumentParser):
 
     def _parse_pdf_file(self, filepath: Path) -> Document:
         """Parse PDF with smart extraction pipeline."""
-        doc: Any = pymupdf.open(filepath)
+        doc: Any = pymupdf.open(filepath)  # type: ignore[no-untyped-call]
 
         # Doc-level metadata
         meta = doc.metadata or {}
@@ -592,9 +592,9 @@ class PyMuPDFParser(BaseDocumentParser):
             image_bytes = pix.tobytes("png")
             loop = asyncio.new_event_loop()
             try:
-                return loop.run_until_complete(
+                return str(loop.run_until_complete(
                     image_describer.describe(image_bytes, "image/png")
-                )
+                ))
             finally:
                 loop.close()
         except Exception as e:
@@ -624,7 +624,7 @@ class PyMuPDFParser(BaseDocumentParser):
 
     def _parse_pdf_file(self, filepath: Path) -> Document:
         """Parse PDF with smart extraction pipeline."""
-        doc: Any = pymupdf.open(filepath)
+        doc: Any = pymupdf.open(filepath)  # type: ignore[no-untyped-call]
 
         # Doc-level metadata
         meta = doc.metadata or {}
