@@ -5,6 +5,7 @@ Contains only database operations. Business logic (password hashing,
 validation) is handled by UserService in app/services/user.py.
 """
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -85,7 +86,7 @@ async def update(
     db: AsyncSession,
     *,
     db_user: User,
-    update_data: dict,
+    update_data: dict[str, Any],
 ) -> User:
     """Update a user.
 
@@ -124,6 +125,8 @@ async def delete(db: AsyncSession, user_id: UUID) -> User | None:
 Contains only database operations. Business logic (password hashing,
 validation) is handled by UserService in app/services/user.py.
 """
+
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -203,7 +206,7 @@ def update(
     db: Session,
     *,
     db_user: User,
-    update_data: dict,
+    update_data: dict[str, Any],
 ) -> User:
     """Update a user.
 
@@ -233,6 +236,8 @@ def delete(db: Session, user_id: str) -> User | None:
 Contains only database operations. Business logic (password hashing,
 validation) is handled by UserService in app/services/user.py.
 """
+
+from typing import Any
 
 from app.db.models.user import User
 
@@ -299,7 +304,7 @@ async def create(
 async def update(
     *,
     db_user: User,
-    update_data: dict,
+    update_data: dict[str, Any],
 ) -> User:
     """Update a user.
 

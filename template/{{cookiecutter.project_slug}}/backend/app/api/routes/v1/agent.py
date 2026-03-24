@@ -55,7 +55,7 @@ router = APIRouter()
 
 
 @router.get("/agent/models")
-async def list_models():
+async def list_models() -> dict[str, Any]:
     """Return available LLM models and the current default."""
     from app.core.config import settings
     return {
@@ -320,7 +320,7 @@ async def agent_websocket(
                 model_history = build_message_history(conversation_history)
 
                 # Collect tool calls during streaming for persistence
-                collected_tool_calls: list[dict] = []
+                collected_tool_calls: list[dict[str, Any]] = []
 
 {%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
                 # Load attached files and build multimodal input
@@ -633,7 +633,7 @@ router = APIRouter()
 
 
 @router.get("/agent/models")
-async def list_models():
+async def list_models() -> dict[str, Any]:
     """Return available LLM models and the current default."""
     from app.core.config import settings
     return {
@@ -1102,7 +1102,7 @@ router = APIRouter()
 
 
 @router.get("/agent/models")
-async def list_models():
+async def list_models() -> dict[str, Any]:
     """Return available LLM models and the current default."""
     from app.core.config import settings
     return {
@@ -1573,7 +1573,7 @@ router = APIRouter()
 
 
 @router.get("/agent/models")
-async def list_models():
+async def list_models() -> dict[str, Any]:
     """Return available LLM models and the current default."""
     from app.core.config import settings
     return {
@@ -2067,7 +2067,7 @@ router = APIRouter()
 
 
 @router.get("/agent/models")
-async def list_models():
+async def list_models() -> dict[str, Any]:
     """Return available LLM models and the current default."""
     from app.core.config import settings
     return {

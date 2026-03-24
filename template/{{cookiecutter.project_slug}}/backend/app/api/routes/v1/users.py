@@ -2,7 +2,7 @@
 # ruff: noqa: I001 - Imports structured for Jinja2 template conditionals
 """User management routes."""
 
-from typing import Annotated
+from typing import Annotated, Any
 {%- if cookiecutter.use_postgresql %}
 
 from uuid import UUID
@@ -33,7 +33,7 @@ router = APIRouter()
 @router.get("/me", response_model=UserRead)
 async def read_current_user(
     current_user: Annotated[User, Depends(get_current_user)],
-):
+) -> Any:
     """Get current user.
 
     Returns the authenticated user's profile including their role.
@@ -46,7 +46,7 @@ async def update_current_user(
     user_in: UserUpdate,
     current_user: Annotated[User, Depends(get_current_user)],
     user_service: UserSvc,
-):
+) -> Any:
     """Update current user.
 
     Users can update their own profile (email, full_name).
@@ -67,7 +67,7 @@ async def upload_avatar(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     user_service: UserSvc = None,  # type: ignore[assignment]
-):
+) -> Any:
     """Upload or replace avatar image for the current user."""
     from fastapi import HTTPException
 
@@ -82,7 +82,7 @@ async def upload_avatar(
 
 
 @router.get("/avatar/{user_id}")
-async def get_avatar(user_id: UUID, user_service: UserSvc):
+async def get_avatar(user_id: UUID, user_service: UserSvc) -> Any:
     """Get user avatar image."""
     from fastapi import HTTPException
     from fastapi.responses import FileResponse
@@ -105,7 +105,7 @@ async def get_avatar(user_id: UUID, user_service: UserSvc):
 async def read_users(
     db: DBSession,
     current_user: Annotated[User, Depends(RoleChecker(UserRole.ADMIN))],
-):
+) -> Any:
     """Get all users (admin only)."""
     return await paginate(db, select(User))
 
@@ -119,7 +119,7 @@ async def read_users(
     current_user: Annotated[User, Depends(RoleChecker(UserRole.ADMIN))],
     skip: int = 0,
     limit: int = 100,
-):
+) -> Any:
     """Get all users (admin only)."""
     users = await user_service.get_multi(skip=skip, limit=limit)
     return users
@@ -133,7 +133,7 @@ async def read_user(
     user_id: UUID,
     user_service: UserSvc,
     current_user: Annotated[User, Depends(RoleChecker(UserRole.ADMIN))],
-):
+) -> Any:
     """Get user by ID (admin only).
 
     Raises NotFoundError if user does not exist.
@@ -148,7 +148,7 @@ async def update_user_by_id(
     user_in: UserUpdate,
     user_service: UserSvc,
     current_user: Annotated[User, Depends(RoleChecker(UserRole.ADMIN))],
-):
+) -> Any:
     """Update user by ID (admin only).
 
     Admins can update any user including their role.
@@ -164,7 +164,7 @@ async def delete_user_by_id(
     user_id: UUID,
     user_service: UserSvc,
     current_user: Annotated[User, Depends(RoleChecker(UserRole.ADMIN))],
-):
+) -> None:
     """Delete user by ID (admin only).
 
     Raises NotFoundError if user does not exist.
@@ -178,7 +178,7 @@ async def delete_user_by_id(
 @router.get("/me", response_model=UserRead)
 async def read_current_user(
     current_user: Annotated[User, Depends(get_current_user)],
-):
+) -> Any:
     """Get current user.
 
     Returns the authenticated user's profile including their role.
@@ -191,7 +191,7 @@ async def update_current_user(
     user_in: UserUpdate,
     current_user: Annotated[User, Depends(get_current_user)],
     user_service: UserSvc,
-):
+) -> Any:
     """Update current user.
 
     Users can update their own profile (email, full_name).
@@ -210,7 +210,7 @@ async def read_users(
     current_user: Annotated[User, Depends(RoleChecker(UserRole.ADMIN))],
     skip: int = 0,
     limit: int = 100,
-):
+) -> Any:
     """Get all users (admin only)."""
     users = await user_service.get_multi(skip=skip, limit=limit)
     return users
@@ -221,7 +221,7 @@ async def read_user(
     user_id: str,
     user_service: UserSvc,
     current_user: Annotated[User, Depends(RoleChecker(UserRole.ADMIN))],
-):
+) -> Any:
     """Get user by ID (admin only).
 
     Raises NotFoundError if user does not exist.
@@ -236,7 +236,7 @@ async def update_user_by_id(
     user_in: UserUpdate,
     user_service: UserSvc,
     current_user: Annotated[User, Depends(RoleChecker(UserRole.ADMIN))],
-):
+) -> Any:
     """Update user by ID (admin only).
 
     Admins can update any user including their role.
@@ -252,7 +252,7 @@ async def delete_user_by_id(
     user_id: str,
     user_service: UserSvc,
     current_user: Annotated[User, Depends(RoleChecker(UserRole.ADMIN))],
-):
+) -> None:
     """Delete user by ID (admin only).
 
     Raises NotFoundError if user does not exist.
@@ -266,7 +266,7 @@ async def delete_user_by_id(
 @router.get("/me", response_model=UserRead)
 def read_current_user(
     current_user: Annotated[User, Depends(get_current_user)],
-):
+) -> Any:
     """Get current user.
 
     Returns the authenticated user's profile including their role.
@@ -279,7 +279,7 @@ def update_current_user(
     user_in: UserUpdate,
     current_user: Annotated[User, Depends(get_current_user)],
     user_service: UserSvc,
-):
+) -> Any:
     """Update current user.
 
     Users can update their own profile (email, full_name).
@@ -299,7 +299,7 @@ def update_current_user(
 def read_users(
     db: DBSession,
     current_user: Annotated[User, Depends(RoleChecker(UserRole.ADMIN))],
-):
+) -> Any:
     """Get all users (admin only)."""
     return paginate(db, select(User))
 
@@ -313,7 +313,7 @@ def read_users(
     current_user: Annotated[User, Depends(RoleChecker(UserRole.ADMIN))],
     skip: int = 0,
     limit: int = 100,
-):
+) -> Any:
     """Get all users (admin only)."""
     users = user_service.get_multi(skip=skip, limit=limit)
     return users
@@ -327,7 +327,7 @@ def read_user(
     user_id: str,
     user_service: UserSvc,
     current_user: Annotated[User, Depends(RoleChecker(UserRole.ADMIN))],
-):
+) -> Any:
     """Get user by ID (admin only).
 
     Raises NotFoundError if user does not exist.
@@ -342,7 +342,7 @@ def update_user_by_id(
     user_in: UserUpdate,
     user_service: UserSvc,
     current_user: Annotated[User, Depends(RoleChecker(UserRole.ADMIN))],
-):
+) -> Any:
     """Update user by ID (admin only).
 
     Admins can update any user including their role.
@@ -358,7 +358,7 @@ def delete_user_by_id(
     user_id: str,
     user_service: UserSvc,
     current_user: Annotated[User, Depends(RoleChecker(UserRole.ADMIN))],
-):
+) -> None:
     """Delete user by ID (admin only).
 
     Raises NotFoundError if user does not exist.

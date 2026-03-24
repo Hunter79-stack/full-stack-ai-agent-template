@@ -3,9 +3,10 @@
 from typing import ClassVar
 from uuid import uuid4
 
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.types import ASGIApp
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
@@ -16,7 +17,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     headers and is available in request.state.request_id.
     """
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Add request ID to request state and response headers."""
         request_id = request.headers.get("X-Request-ID", str(uuid4()))
         request.state.request_id = request_id
@@ -64,15 +65,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,
-        csp_directives: dict | None = None,
-        exclude_paths: set | None = None,
-    ):
+        app: ASGIApp,
+        csp_directives: dict[str, str] | None = None,
+        exclude_paths: set[str] | None = None,
+    ) -> None:
         super().__init__(app)
         self.csp_directives = csp_directives or self.DEFAULT_CSP_DIRECTIVES
         self.exclude_paths = exclude_paths or {"/docs", "/redoc", "/openapi.json"}
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Add security headers to the response."""
         response = await call_next(request)
 

@@ -31,7 +31,8 @@ class BaseSchema(BaseModel):
         """Return a dict with only JSON-serializable fields."""
         from fastapi.encoders import jsonable_encoder
 
-        return jsonable_encoder(self.model_dump(**kwargs))
+        result: dict[str, Any] = jsonable_encoder(self.model_dump(**kwargs))
+        return result
 
 
 class TimestampSchema(BaseModel):

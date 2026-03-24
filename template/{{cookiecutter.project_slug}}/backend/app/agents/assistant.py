@@ -218,7 +218,7 @@ class AssistantAgent:
         user_input: str,
         history: list[dict[str, str]] | None = None,
         deps: Deps | None = None,
-    ):
+    ) -> Any:
         """Stream agent execution with full event access.
 
         Args:

@@ -16,7 +16,7 @@ class PiiRedactionFilter(logging.Filter):
         logging.getLogger().addFilter(PiiRedactionFilter())
     """
 
-    PATTERNS: ClassVar[list[tuple[re.Pattern, str]]] = [
+    PATTERNS: ClassVar[list[tuple[re.Pattern[str], str]]] = [
         # Email addresses
         (re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"), "[EMAIL_REDACTED]"),
         # JWT tokens (header.payload.signature)

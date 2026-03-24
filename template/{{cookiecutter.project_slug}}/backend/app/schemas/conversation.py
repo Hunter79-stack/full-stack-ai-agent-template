@@ -4,7 +4,7 @@ This module contains Pydantic schemas for Conversation, Message, and ToolCall en
 """
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 {%- if cookiecutter.use_postgresql %}
 from uuid import UUID
@@ -26,13 +26,13 @@ class ToolCallBase(BaseSchema):
 
     tool_call_id: str = Field(..., description="External tool call ID from AI framework")
     tool_name: str = Field(..., max_length=100, description="Name of the tool called")
-    args: dict = Field(default_factory=dict, description="Tool arguments")
+    args: dict[str, Any] = Field(default_factory=dict, description="Tool arguments")
 
 {%- if cookiecutter.use_sqlite %}
 
     @field_validator("args", mode="before")
     @classmethod
-    def deserialize_args(cls, v: object) -> dict:
+    def deserialize_args(cls, v: object) -> dict[str, Any]:
         """Deserialize args from JSON string (SQLite stores as TEXT)."""
         if isinstance(v, str):
             import json

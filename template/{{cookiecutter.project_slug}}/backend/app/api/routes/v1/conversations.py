@@ -13,7 +13,10 @@ The endpoints are:
 """
 
 {%- if cookiecutter.use_postgresql %}
+from typing import Any
 from uuid import UUID
+{%- else %}
+from typing import Any
 {%- endif %}
 
 from fastapi import APIRouter, Query, status
@@ -50,7 +53,7 @@ async def export_conversations(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentAdmin,
 {%- endif %}
-):
+) -> Any:
     """Export all conversations with messages and tool calls (admin only)."""
     from fastapi.responses import JSONResponse
 
@@ -68,7 +71,7 @@ async def list_conversations(
     skip: int = Query(0, ge=0, description="Number of conversations to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum conversations to return"),
     include_archived: bool = Query(False, description="Include archived conversations"),
-):
+) -> Any:
     """List conversations for the current user.
 
     Returns conversations ordered by most recently updated.
@@ -91,7 +94,7 @@ async def create_conversation(
     current_user: CurrentUser,
 {%- endif %}
     data: ConversationCreate | None = None,
-):
+) -> Any:
     """Create a new conversation.
 
     The title is optional and can be set later.
@@ -111,7 +114,7 @@ async def get_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Get a conversation with all its messages.
 
     Raises 404 if the conversation does not exist.
@@ -132,7 +135,7 @@ async def update_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Update a conversation's title or archived status.
 
     Raises 404 if the conversation does not exist.
@@ -152,7 +155,7 @@ async def delete_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> None:
     """Delete a conversation and all its messages.
 
     Raises 404 if the conversation does not exist.
@@ -175,7 +178,7 @@ async def archive_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Archive a conversation.
 
     Archived conversations are hidden from the default list view.
@@ -197,7 +200,7 @@ async def list_messages(
 {%- endif %}
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-):
+) -> Any:
     """List messages in a conversation.
 
     Returns messages ordered by creation time (oldest first).
@@ -218,7 +221,7 @@ async def add_message(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Add a message to a conversation.
 
     Raises 404 if the conversation does not exist.
@@ -235,7 +238,7 @@ def export_conversations(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentAdmin,
 {%- endif %}
-):
+) -> Any:
     """Export all conversations with messages and tool calls (admin only)."""
     from fastapi.responses import JSONResponse
 
@@ -253,7 +256,7 @@ def list_conversations(
     skip: int = Query(0, ge=0, description="Number of conversations to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum conversations to return"),
     include_archived: bool = Query(False, description="Include archived conversations"),
-):
+) -> Any:
     """List conversations for the current user.
 
     Returns conversations ordered by most recently updated.
@@ -276,7 +279,7 @@ def create_conversation(
     current_user: CurrentUser,
 {%- endif %}
     data: ConversationCreate | None = None,
-):
+) -> Any:
     """Create a new conversation.
 
     The title is optional and can be set later.
@@ -296,7 +299,7 @@ def get_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Get a conversation with all its messages.
 
     Raises 404 if the conversation does not exist.
@@ -312,7 +315,7 @@ def update_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Update a conversation's title or archived status.
 
     Raises 404 if the conversation does not exist.
@@ -332,7 +335,7 @@ def delete_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> None:
     """Delete a conversation and all its messages.
 
     Raises 404 if the conversation does not exist.
@@ -355,7 +358,7 @@ def archive_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Archive a conversation.
 
     Archived conversations are hidden from the default list view.
@@ -377,7 +380,7 @@ def list_messages(
 {%- endif %}
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-):
+) -> Any:
     """List messages in a conversation.
 
     Returns messages ordered by creation time (oldest first).
@@ -398,7 +401,7 @@ def add_message(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Add a message to a conversation.
 
     Raises 404 if the conversation does not exist.
@@ -418,7 +421,7 @@ async def list_conversations(
     skip: int = Query(0, ge=0, description="Number of conversations to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum conversations to return"),
     include_archived: bool = Query(False, description="Include archived conversations"),
-):
+) -> Any:
     """List conversations for the current user.
 
     Returns conversations ordered by most recently updated.
@@ -441,7 +444,7 @@ async def create_conversation(
     current_user: CurrentUser,
 {%- endif %}
     data: ConversationCreate | None = None,
-):
+) -> Any:
     """Create a new conversation.
 
     The title is optional and can be set later.
@@ -461,7 +464,7 @@ async def get_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Get a conversation with all its messages.
 
     Raises 404 if the conversation does not exist.
@@ -482,7 +485,7 @@ async def update_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Update a conversation's title or archived status.
 
     Raises 404 if the conversation does not exist.
@@ -502,7 +505,7 @@ async def delete_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> None:
     """Delete a conversation and all its messages.
 
     Raises 404 if the conversation does not exist.
@@ -525,7 +528,7 @@ async def archive_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Archive a conversation.
 
     Archived conversations are hidden from the default list view.
@@ -547,7 +550,7 @@ async def list_messages(
 {%- endif %}
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-):
+) -> Any:
     """List messages in a conversation.
 
     Returns messages ordered by creation time (oldest first).
@@ -568,7 +571,7 @@ async def add_message(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Add a message to a conversation.
 
     Raises 404 if the conversation does not exist.

@@ -6,6 +6,7 @@ creation. Moves parsing helpers and file classification out of the route layer.
 """
 
 import logging
+from typing import Any
 {%- if cookiecutter.use_all_pdf_parsers or cookiecutter.use_llamaparse %}
 import os
 import tempfile
@@ -220,7 +221,7 @@ class FileUploadService:
             return None
 {%- endif %}
 
-    async def get_user_file(self, file_id, user_id) -> ChatFile:
+    async def get_user_file(self, file_id: Any, user_id: Any) -> ChatFile:
         """Get a file by ID, verifying ownership.
 
         Raises:
@@ -237,7 +238,7 @@ class FileUploadService:
     async def create_chat_file(
         self,
         *,
-        user_id,
+        user_id: Any,
         filename: str,
         mime_type: str,
         size: int,
@@ -270,6 +271,7 @@ creation. Moves parsing helpers and file classification out of the route layer.
 """
 
 import logging
+from typing import Any
 {%- if cookiecutter.use_all_pdf_parsers or cookiecutter.use_llamaparse %}
 import os
 import tempfile
@@ -488,7 +490,7 @@ class FileUploadService:
             return None
 {%- endif %}
 
-    def get_user_file(self, file_id, user_id) -> ChatFile:
+    def get_user_file(self, file_id: Any, user_id: Any) -> ChatFile:
         """Get a file by ID, verifying ownership.
 
         Raises:
@@ -505,7 +507,7 @@ class FileUploadService:
     def create_chat_file(
         self,
         *,
-        user_id,
+        user_id: Any,
         filename: str,
         mime_type: str,
         size: int,

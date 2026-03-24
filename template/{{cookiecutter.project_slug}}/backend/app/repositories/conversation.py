@@ -5,6 +5,7 @@ Contains database operations for Conversation, Message, and ToolCall entities.
 """
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select, update as sql_update
@@ -103,7 +104,7 @@ async def update_conversation(
     db: AsyncSession,
     *,
     db_conversation: Conversation,
-    update_data: dict,
+    update_data: dict[str, Any],
 ) -> Conversation:
     """Update a conversation."""
     for field, value in update_data.items():
@@ -240,7 +241,7 @@ async def create_tool_call(
     message_id: UUID,
     tool_call_id: str,
     tool_name: str,
-    args: dict,
+    args: dict[str, Any],
     started_at: datetime,
 ) -> ToolCall:
     """Create a new tool call record."""
@@ -289,6 +290,7 @@ Contains database operations for Conversation, Message, and ToolCall entities.
 """
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import func, select, update as sql_update
 from sqlalchemy.orm import Session, selectinload
@@ -385,7 +387,7 @@ def update_conversation(
     db: Session,
     *,
     db_conversation: Conversation,
-    update_data: dict,
+    update_data: dict[str, Any],
 ) -> Conversation:
     """Update a conversation."""
     for field, value in update_data.items():
@@ -522,7 +524,7 @@ def create_tool_call(
     message_id: str,
     tool_call_id: str,
     tool_name: str,
-    args: dict,
+    args: dict[str, Any],
     started_at: datetime,
 ) -> ToolCall:
     """Create a new tool call record."""
@@ -542,7 +544,7 @@ def create_tool_call(
     return tool_call
 
 
-def deserialize_tool_call_args(tool_call: ToolCall) -> dict:
+def deserialize_tool_call_args(tool_call: ToolCall) -> dict[str, Any]:
     """Deserialize tool call args from JSON string (SQLite stores as TEXT)."""
     import json
 
@@ -585,6 +587,7 @@ Contains database operations for Conversation, Message, and ToolCall entities.
 """
 
 from datetime import UTC, datetime
+from typing import Any
 
 from app.db.models.conversation import Conversation, Message, ToolCall
 
@@ -664,7 +667,7 @@ async def create_conversation(
 async def update_conversation(
     *,
     db_conversation: Conversation,
-    update_data: dict,
+    update_data: dict[str, Any],
 ) -> Conversation:
     """Update a conversation."""
     for field, value in update_data.items():
@@ -790,7 +793,7 @@ async def create_tool_call(
     message_id: str,
     tool_call_id: str,
     tool_name: str,
-    args: dict,
+    args: dict[str, Any],
     started_at: datetime,
 ) -> ToolCall:
     """Create a new tool call record."""

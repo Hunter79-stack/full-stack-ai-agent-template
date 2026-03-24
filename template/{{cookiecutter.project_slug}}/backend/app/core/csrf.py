@@ -24,12 +24,12 @@ Usage:
 """
 
 import secrets
-from collections.abc import Callable
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.types import ASGIApp
 
 from app.core.config import settings
 
@@ -60,13 +60,13 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         "/redoc",
     }
 
-    def __init__(self, app: Callable, **kwargs):
+    def __init__(self, app: ASGIApp, **kwargs: Any) -> None:
         super().__init__(app)
-        self.exempt_paths = set(kwargs.get("exempt_paths", self.EXEMPT_PATHS))
-        self.cookie_name = kwargs.get("cookie_name", self.COOKIE_NAME)
-        self.header_name = kwargs.get("header_name", self.HEADER_NAME)
+        self.exempt_paths: set[str] = set(kwargs.get("exempt_paths", self.EXEMPT_PATHS))
+        self.cookie_name: str = kwargs.get("cookie_name", self.COOKIE_NAME)
+        self.header_name: str = kwargs.get("header_name", self.HEADER_NAME)
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Handle the request and apply CSRF protection."""
         # Skip for exempt paths
         if self._is_exempt(request):

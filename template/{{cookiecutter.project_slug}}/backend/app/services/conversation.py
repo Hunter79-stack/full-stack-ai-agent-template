@@ -5,6 +5,7 @@ Contains business logic for conversation, message, and tool call operations.
 """
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +30,7 @@ class ConversationService:
 
     # Export Methods
 
-    async def export_all(self) -> list[dict]:
+    async def export_all(self) -> list[dict[str, Any]]:
         """Export all conversations with messages for admin download."""
         import json
 
@@ -375,6 +376,7 @@ Contains business logic for conversation, message, and tool call operations.
 """
 
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -398,7 +400,7 @@ class ConversationService:
 
     # Export Methods
 
-    def export_all(self) -> list[dict]:
+    def export_all(self) -> list[dict[str, Any]]:
         """Export all conversations with messages for admin download."""
         import json as _json
 

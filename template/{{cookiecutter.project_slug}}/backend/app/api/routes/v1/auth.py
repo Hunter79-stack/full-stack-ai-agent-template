@@ -1,7 +1,7 @@
 {%- if cookiecutter.use_jwt %}
 """Authentication routes."""
 
-from typing import Annotated
+from typing import Annotated, Any
 {%- if cookiecutter.use_postgresql and not cookiecutter.enable_session_management %}
 from uuid import UUID
 {%- endif %}
@@ -31,7 +31,7 @@ async def login(
 {%- if cookiecutter.enable_session_management %}
     session_service: SessionSvc,
 {%- endif %}
-):
+) -> Any:
     """OAuth2 compatible token login.
 
     Returns access token and refresh token.
@@ -57,7 +57,7 @@ async def login(
 async def register(
     user_in: UserCreate,
     user_service: UserSvc,
-):
+) -> Any:
     """Register a new user.
 
     Raises AlreadyExistsError if email is already registered.
@@ -76,7 +76,7 @@ async def refresh_token(
 {%- if cookiecutter.enable_session_management %}
     session_service: SessionSvc,
 {%- endif %}
-):
+) -> Any:
     """Get new access token using refresh token.
 
     Raises AuthenticationError if refresh token is invalid or expired.
@@ -130,7 +130,7 @@ async def refresh_token(
 async def logout(
     body: RefreshTokenRequest,
     session_service: SessionSvc,
-):
+) -> None:
     """Logout and invalidate the current session.
 
     Invalidates the refresh token, preventing further token refresh.
@@ -140,7 +140,7 @@ async def logout(
 
 
 @router.get("/me", response_model=UserRead)
-async def get_current_user_info(current_user: CurrentUser):
+async def get_current_user_info(current_user: CurrentUser) -> Any:
     """Get current authenticated user information."""
     return current_user
 {%- elif cookiecutter.use_mongodb %}
@@ -156,7 +156,7 @@ async def login(
 {%- if cookiecutter.enable_session_management %}
     session_service: SessionSvc,
 {%- endif %}
-):
+) -> Any:
     """OAuth2 compatible token login.
 
     Returns access token and refresh token.
@@ -182,7 +182,7 @@ async def login(
 async def register(
     user_in: UserCreate,
     user_service: UserSvc,
-):
+) -> Any:
     """Register a new user.
 
     Raises AlreadyExistsError if email is already registered.
@@ -201,7 +201,7 @@ async def refresh_token(
 {%- if cookiecutter.enable_session_management %}
     session_service: SessionSvc,
 {%- endif %}
-):
+) -> Any:
     """Get new access token using refresh token.
 
     Raises AuthenticationError if refresh token is invalid or expired.
@@ -253,7 +253,7 @@ async def refresh_token(
 async def logout(
     body: RefreshTokenRequest,
     session_service: SessionSvc,
-):
+) -> None:
     """Logout and invalidate the current session.
 
     Invalidates the refresh token, preventing further token refresh.
@@ -263,7 +263,7 @@ async def logout(
 
 
 @router.get("/me", response_model=UserRead)
-async def get_current_user_info(current_user: CurrentUser):
+async def get_current_user_info(current_user: CurrentUser) -> Any:
     """Get current authenticated user information."""
     return current_user
 {%- elif cookiecutter.use_sqlite %}
@@ -279,7 +279,7 @@ def login(
 {%- if cookiecutter.enable_session_management %}
     session_service: SessionSvc,
 {%- endif %}
-):
+) -> Any:
     """OAuth2 compatible token login.
 
     Returns access token and refresh token.
@@ -305,7 +305,7 @@ def login(
 def register(
     user_in: UserCreate,
     user_service: UserSvc,
-):
+) -> Any:
     """Register a new user.
 
     Raises AlreadyExistsError if email is already registered.
@@ -324,7 +324,7 @@ def refresh_token(
 {%- if cookiecutter.enable_session_management %}
     session_service: SessionSvc,
 {%- endif %}
-):
+) -> Any:
     """Get new access token using refresh token.
 
     Raises AuthenticationError if refresh token is invalid or expired.
@@ -376,7 +376,7 @@ def refresh_token(
 def logout(
     body: RefreshTokenRequest,
     session_service: SessionSvc,
-):
+) -> None:
     """Logout and invalidate the current session.
 
     Invalidates the refresh token, preventing further token refresh.
@@ -386,7 +386,7 @@ def logout(
 
 
 @router.get("/me", response_model=UserRead)
-def get_current_user_info(current_user: CurrentUser):
+def get_current_user_info(current_user: CurrentUser) -> Any:
     """Get current authenticated user information."""
     return current_user
 {%- endif %}

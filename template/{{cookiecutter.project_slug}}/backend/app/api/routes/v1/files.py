@@ -2,6 +2,7 @@
 """File upload and download endpoints for chat attachments."""
 
 import logging
+from typing import Any
 {%- if cookiecutter.use_postgresql %}
 from uuid import UUID
 {%- endif %}
@@ -22,7 +23,7 @@ async def upload_file(
     file: UploadFile = File(...),
     file_upload_svc: FileUploadSvc = None,  # type: ignore[assignment]
     current_user: CurrentUser = None,  # type: ignore[assignment]
-):
+) -> Any:
     """Upload a file for use in chat."""
     data = await file.read()
     is_valid, error = file_upload_svc.validate_upload(file.content_type, len(data))
@@ -74,7 +75,7 @@ def download_file(
 {%- endif %}
     file_upload_svc: FileUploadSvc = None,  # type: ignore[assignment]
     current_user: CurrentUser = None,  # type: ignore[assignment]
-):
+) -> Any:
     """Download a file. Only the owner can access their files."""
     from app.core.exceptions import NotFoundError
     from app.services.file_storage import get_file_storage
@@ -106,7 +107,7 @@ def get_file_info(
 {%- endif %}
     file_upload_svc: FileUploadSvc = None,  # type: ignore[assignment]
     current_user: CurrentUser = None,  # type: ignore[assignment]
-):
+) -> Any:
     """Get file metadata. Only the owner can access."""
     from app.core.exceptions import NotFoundError
 

@@ -10,9 +10,11 @@ import logging
 from collections.abc import Callable
 from datetime import datetime
 from functools import wraps
+from typing import Any
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.types import ASGIApp
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +36,9 @@ class VersionDeprecationMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,
-        deprecated_versions: dict[str, dict] | None = None,
-    ):
+        app: ASGIApp,
+        deprecated_versions: dict[str, dict[str, str]] | None = None,
+    ) -> None:
         """Initialize the middleware.
 
         Args:
@@ -76,7 +78,7 @@ class VersionDeprecationMiddleware(BaseHTTPMiddleware):
         return response
 
     def _add_deprecation_headers(
-        self, response: Response, version: str, info: dict
+        self, response: Response, version: str, info: dict[str, str]
     ) -> None:
         """Add RFC 8594 deprecation headers to the response."""
         # Deprecation header - indicates the API is deprecated
@@ -110,7 +112,7 @@ def deprecated(
     sunset: str | None = None,
     message: str | None = None,
     link: str | None = None,
-):
+) -> Callable[..., Any]:
     """Decorator to mark an endpoint as deprecated.
 
     Adds deprecation headers to responses from the decorated endpoint.
@@ -132,9 +134,9 @@ def deprecated(
             ...
     """
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             # Get the response from the endpoint
             result = await func(*args, **kwargs)
 
