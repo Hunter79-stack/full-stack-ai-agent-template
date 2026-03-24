@@ -233,11 +233,11 @@ async def ingest_path_async(
                         replaced_count += 1
 {%- if cookiecutter.use_postgresql %}
                     async with get_db_context() as db:
-                        rag_doc = await db.get(RAGDocument, doc_id)
-                        if rag_doc:
-                            rag_doc.status = "done"
-                            rag_doc.vector_document_id = result.document_id
-                            rag_doc.completed_at = datetime.now(UTC)
+                        rag_doc_result: RAGDocument | None = await db.get(RAGDocument, doc_id)
+                        if rag_doc_result:
+                            rag_doc_result.status = "done"
+                            rag_doc_result.vector_document_id = result.document_id
+                            rag_doc_result.completed_at = datetime.now(UTC)
                             await db.commit()
 {%- endif %}
                 else:
@@ -245,11 +245,11 @@ async def ingest_path_async(
                     tqdm.write(f"  ✗ {filepath.name}: {result.error_message}")
 {%- if cookiecutter.use_postgresql %}
                     async with get_db_context() as db:
-                        rag_doc = await db.get(RAGDocument, doc_id)
-                        if rag_doc:
-                            rag_doc.status = "error"
-                            rag_doc.error_message = result.error_message
-                            rag_doc.completed_at = datetime.now(UTC)
+                        rag_doc_result = await db.get(RAGDocument, doc_id)
+                        if rag_doc_result:
+                            rag_doc_result.status = "error"
+                            rag_doc_result.error_message = result.error_message
+                            rag_doc_result.completed_at = datetime.now(UTC)
                             await db.commit()
 {%- endif %}
             except Exception as e:
@@ -257,25 +257,25 @@ async def ingest_path_async(
                 tqdm.write(f"  ✗ {filepath.name}: {str(e)}")
 {%- if cookiecutter.use_postgresql %}
                 async with get_db_context() as db:
-                    rag_doc = await db.get(RAGDocument, doc_id)
-                    if rag_doc:
-                        rag_doc.status = "error"
-                        rag_doc.error_message = str(e)
-                        rag_doc.completed_at = datetime.now(UTC)
+                    rag_doc_result = await db.get(RAGDocument, doc_id)
+                    if rag_doc_result:
+                        rag_doc_result.status = "error"
+                        rag_doc_result.error_message = str(e)
+                        rag_doc_result.completed_at = datetime.now(UTC)
                         await db.commit()
 {%- endif %}
 
 {%- if cookiecutter.use_postgresql %}
     # Update SyncLog
     async with get_db_context() as db:
-        sync_log = await db.get(SyncLog, sync_log_id)
-        if sync_log:
-            sync_log.status = "done" if error_count == 0 else "error"
-            sync_log.ingested = success_count - replaced_count
-            sync_log.updated = replaced_count
-            sync_log.skipped = skipped_count
-            sync_log.failed = error_count
-            sync_log.completed_at = datetime.now(UTC)
+        sync_log_result: SyncLog | None = await db.get(SyncLog, sync_log_id)
+        if sync_log_result:
+            sync_log_result.status = "done" if error_count == 0 else "error"
+            sync_log_result.ingested = success_count - replaced_count
+            sync_log_result.updated = replaced_count
+            sync_log_result.skipped = skipped_count
+            sync_log_result.failed = error_count
+            sync_log_result.completed_at = datetime.now(UTC)
             await db.commit()
 {%- endif %}
 

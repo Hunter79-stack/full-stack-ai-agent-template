@@ -98,7 +98,7 @@ class FileUploadService:
                 text = page.get_text("text")
                 if text.strip():
                     text_parts.append(text.strip())
-            doc.close()  # type: ignore[no-untyped-call]
+            doc.close()
             return "\n\n".join(text_parts) if text_parts else None
         except Exception as e:
             logger.warning(f"PyMuPDF PDF parsing failed: {e}")
@@ -169,8 +169,8 @@ class FileUploadService:
             import io
             from docx import Document as DOCXDocument
 
-            doc = DOCXDocument(io.BytesIO(data))  # type: ignore[no-untyped-call]
-            return "\n".join(p.text for p in doc.paragraphs if p.text.strip())  # type: ignore[attr-defined]
+            doc: Any = DOCXDocument(io.BytesIO(data))
+            return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
         except Exception as e:
             logger.warning(f"DOCX parsing failed: {e}")
             return None
@@ -201,7 +201,7 @@ class FileUploadService:
                                 texts.append(df.to_markdown(index=False))
                 except Exception:
                     pass
-            doc.close()  # type: ignore[no-untyped-call]
+            doc.close()
             return "\n\n".join(texts) if texts else None
         except Exception as e:
             logger.warning(f"PDF parsing failed: {e}")
@@ -214,8 +214,8 @@ class FileUploadService:
             import io
             from docx import Document as DOCXDocument
 
-            doc = DOCXDocument(io.BytesIO(data))  # type: ignore[no-untyped-call]
-            return "\n".join(p.text for p in doc.paragraphs if p.text.strip())  # type: ignore[attr-defined]
+            doc: Any = DOCXDocument(io.BytesIO(data))
+            return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
         except Exception as e:
             logger.warning(f"DOCX parsing failed: {e}")
             return None
@@ -363,7 +363,7 @@ class FileUploadService:
                 text = page.get_text("text")
                 if text.strip():
                     text_parts.append(text.strip())
-            doc.close()  # type: ignore[no-untyped-call]
+            doc.close()
             return "\n\n".join(text_parts) if text_parts else None
         except Exception as e:
             logger.warning(f"PyMuPDF PDF parsing failed: {e}")
@@ -438,8 +438,8 @@ class FileUploadService:
             import io
             from docx import Document as DOCXDocument
 
-            doc = DOCXDocument(io.BytesIO(data))  # type: ignore[no-untyped-call]
-            return "\n".join(p.text for p in doc.paragraphs if p.text.strip())  # type: ignore[attr-defined]
+            doc: Any = DOCXDocument(io.BytesIO(data))
+            return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
         except Exception as e:
             logger.warning(f"DOCX parsing failed: {e}")
             return None
@@ -470,7 +470,7 @@ class FileUploadService:
                                 texts.append(df.to_markdown(index=False))
                 except Exception:
                     pass
-            doc.close()  # type: ignore[no-untyped-call]
+            doc.close()
             return "\n\n".join(texts) if texts else None
         except Exception as e:
             logger.warning(f"PDF parsing failed: {e}")
@@ -483,8 +483,8 @@ class FileUploadService:
             import io
             from docx import Document as DOCXDocument
 
-            doc = DOCXDocument(io.BytesIO(data))  # type: ignore[no-untyped-call]
-            return "\n".join(p.text for p in doc.paragraphs if p.text.strip())  # type: ignore[attr-defined]
+            doc: Any = DOCXDocument(io.BytesIO(data))
+            return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
         except Exception as e:
             logger.warning(f"DOCX parsing failed: {e}")
             return None

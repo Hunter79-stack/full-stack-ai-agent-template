@@ -188,7 +188,19 @@ async def register(
     Raises AlreadyExistsError if email is already registered.
     """
     user = await user_service.register(user_in)
-    return user
+    return UserRead(
+        id=str(user.id),
+        email=user.email,
+        full_name=user.full_name,
+        is_active=user.is_active,
+        role=user.role,
+{%- if cookiecutter.enable_oauth %}
+        oauth_provider=user.oauth_provider,
+{%- endif %}
+        avatar_url=user.avatar_url,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+    )
 
 
 @router.post("/refresh", response_model=Token)
@@ -265,7 +277,19 @@ async def logout(
 @router.get("/me", response_model=UserRead)
 async def get_current_user_info(current_user: CurrentUser) -> Any:
     """Get current authenticated user information."""
-    return current_user
+    return UserRead(
+        id=str(current_user.id),
+        email=current_user.email,
+        full_name=current_user.full_name,
+        is_active=current_user.is_active,
+        role=current_user.role,
+{%- if cookiecutter.enable_oauth %}
+        oauth_provider=current_user.oauth_provider,
+{%- endif %}
+        avatar_url=current_user.avatar_url,
+        created_at=current_user.created_at,
+        updated_at=current_user.updated_at,
+    )
 {%- elif cookiecutter.use_sqlite %}
 
 

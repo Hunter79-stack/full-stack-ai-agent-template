@@ -338,6 +338,7 @@ class AdminAuth(AuthenticationBackend):
 
             if (
                 user
+                and user.hashed_password
                 and verify_password(password, user.hashed_password)
                 and user.has_role(UserRole.ADMIN)
             ):

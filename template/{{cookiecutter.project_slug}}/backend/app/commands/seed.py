@@ -1,4 +1,4 @@
-{%- if cookiecutter.use_postgresql or cookiecutter.use_sqlite -%}
+{%- if cookiecutter.use_postgresql or cookiecutter.use_sqlite or cookiecutter.use_mongodb -%}
 # ruff: noqa: I001 - Imports structured for Jinja2 template conditionals
 """
 Seed database with sample data.
@@ -7,14 +7,14 @@ This command is useful for development and testing.
 Uses random data generation - install faker for better data:
     uv add faker --group dev
 """
-{% if cookiecutter.use_postgresql %}
+{% if cookiecutter.use_postgresql or cookiecutter.use_mongodb %}
 import asyncio
 {% endif %}
 import random
 import string
 
 import click
-{% if cookiecutter.use_jwt %}
+{% if cookiecutter.use_jwt and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
 from sqlalchemy import delete, select
 {% endif %}
 
@@ -179,5 +179,61 @@ def seed(
             success(f"Created: {summary}")
         else:
             info("No records created.")
+{%- elif cookiecutter.use_mongodb %}
+{%- if cookiecutter.use_jwt %}
+    from app.db.models.user import User
+    from app.core.security import get_password_hash
+{%- endif %}
+    from beanie import init_beanie
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from app.core.config import settings
+
+    async def _seed() -> None:
+        client = AsyncIOMotorClient(settings.MONGO_URL)
+        await init_beanie(
+            database=client[settings.MONGO_DB],
+            document_models=[
+{%- if cookiecutter.use_jwt %}
+                User,
+{%- endif %}
+            ],
+        )
+        created_counts = {}
+
+{%- if cookiecutter.use_jwt %}
+        # Seed users
+        if users:
+            if clear:
+                info("Clearing existing users (except admins)...")
+                await User.find(User.role != "admin").delete()
+
+            # Check how many users already exist
+            existing = await User.find_one()
+
+            if existing and not clear:
+                info("Users already exist. Use --clear to replace them.")
+            else:
+                info(f"Creating {count} sample users...")
+                for _ in range(count):
+                    user = User(
+                        email=random_email(),
+                        hashed_password=get_password_hash("password123"),
+                        full_name=random_name(),
+                        is_active=True,
+                        role="user",
+                    )
+                    await user.insert()
+                created_counts["users"] = count
+{%- endif %}
+
+        if created_counts:
+            summary = ", ".join(f"{v} {k}" for k, v in created_counts.items())
+            success(f"Created: {summary}")
+        else:
+            info("No records created.")
+
+        client.close()
+
+    asyncio.run(_seed())
 {%- endif %}
 {%- endif %}

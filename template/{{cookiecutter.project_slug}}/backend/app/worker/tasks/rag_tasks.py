@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 {%- if cookiecutter.use_celery %}
 
 
-@shared_task(bind=True, max_retries=2, soft_time_limit=300, time_limit=360)  # type: ignore[untyped-decorator]
-def ingest_document_task(self, rag_document_id: str, collection_name: str, filepath: str, source_path: str, replace: bool = False) -> dict[str, Any]:
+@shared_task(bind=True, max_retries=2, soft_time_limit=300, time_limit=360)  # type: ignore[misc]
+def ingest_document_task(self: Any, rag_document_id: str, collection_name: str, filepath: str, source_path: str, replace: bool = False) -> dict[str, Any]:
     """Process a document: parse, chunk, embed, store in vector DB."""
     logger.info(f"Starting ingestion: {source_path} -> {collection_name}")
     try:
@@ -33,8 +33,8 @@ def ingest_document_task(self, rag_document_id: str, collection_name: str, filep
         raise self.retry(exc=exc, countdown=30) from exc
 
 
-@shared_task(bind=True, max_retries=1, soft_time_limit=600, time_limit=720)  # type: ignore[untyped-decorator]
-def sync_collection_task(self, sync_log_id: str, source: str, collection_name: str, mode: str, path: str) -> dict[str, Any]:
+@shared_task(bind=True, max_retries=1, soft_time_limit=600, time_limit=720)  # type: ignore[misc]
+def sync_collection_task(self: Any, sync_log_id: str, source: str, collection_name: str, mode: str, path: str) -> dict[str, Any]:
     """Sync a collection from a local directory."""
     logger.info(f"Starting sync: {source} -> {collection_name} (mode={mode})")
     try:
@@ -98,8 +98,8 @@ async def sync_collection_task(ctx: dict, sync_log_id: str, source: str, collect
 {%- if cookiecutter.use_celery %}
 
 
-@shared_task(bind=True, max_retries=2, soft_time_limit=600, time_limit=720)  # type: ignore[untyped-decorator]
-def sync_single_source_task(self, source_id: str, sync_log_id: str | None = None) -> dict[str, Any]:
+@shared_task(bind=True, max_retries=2, soft_time_limit=600, time_limit=720)  # type: ignore[misc]
+def sync_single_source_task(self: Any, source_id: str, sync_log_id: str | None = None) -> dict[str, Any]:
     """Sync a single connector source. If sync_log_id provided, use existing log."""
     logger.info(f"Starting source sync: {source_id}")
     try:
@@ -109,7 +109,7 @@ def sync_single_source_task(self, source_id: str, sync_log_id: str | None = None
         raise self.retry(exc=exc, countdown=60) from exc
 
 
-@shared_task  # type: ignore[untyped-decorator]
+@shared_task  # type: ignore[misc]
 def check_scheduled_syncs() -> None:
     """Periodic task: find sources due for sync and dispatch individual tasks."""
     async def _check() -> None:
@@ -344,7 +344,7 @@ async def _notify_ws(rag_document_id: str, status: str, filename: str) -> None:
         import json
         import redis.asyncio as aioredis
         from app.core.config import settings
-        r = aioredis.from_url(f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}")
+        r = aioredis.from_url(f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}")  # type: ignore[no-untyped-call]
         await r.publish("rag_status", json.dumps({
             "document_id": rag_document_id, "status": status, "filename": filename,
         }))

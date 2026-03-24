@@ -144,7 +144,7 @@ class DocxDocumentParser(BaseDocumentParser):
         Returns:
             Document object with the file content.
         """
-        file = DOCXDocument(filepath)  # type: ignore[arg-type]
+        file: Any = DOCXDocument(filepath)
         page = DocumentPage(
             page_num=1,
             content="\n".join([p.text for p in file.paragraphs])
@@ -219,7 +219,7 @@ class PyMuPDFParser(BaseDocumentParser):
             text = b[4].strip()
             if text and text not in repeated:
                 texts.append(text)
-        return "\n\n".join(texts)
+        return str("\n\n".join(texts))
 
     def _extract_tables(self, page: Any) -> str:
         """Extract tables as markdown."""
@@ -229,7 +229,7 @@ class PyMuPDFParser(BaseDocumentParser):
                 return ""
             parts = []
             for table in tables.tables:
-                df = table.to_pandas()  # type: ignore[no-untyped-call]
+                df = table.to_pandas()
                 if not df.empty:
                     parts.append(df.to_markdown(index=False))
             return "\n\n".join(parts)
@@ -490,7 +490,7 @@ class DocxDocumentParser(BaseDocumentParser):
         Returns:
             Document object with the file content.
         """
-        file = DOCXDocument(filepath)  # type: ignore[arg-type]
+        file: Any = DOCXDocument(filepath)
         page = DocumentPage(
             page_num=1,
             content="\n".join([p.text for p in file.paragraphs])
@@ -565,7 +565,7 @@ class PyMuPDFParser(BaseDocumentParser):
             text = b[4].strip()
             if text and text not in repeated:
                 texts.append(text)
-        return "\n\n".join(texts)
+        return str("\n\n".join(texts))
 
     def _extract_tables(self, page: Any) -> str:
         """Extract tables as markdown."""
@@ -575,7 +575,7 @@ class PyMuPDFParser(BaseDocumentParser):
                 return ""
             parts = []
             for table in tables.tables:
-                df = table.to_pandas()  # type: ignore[no-untyped-call]
+                df = table.to_pandas()
                 if not df.empty:
                     parts.append(df.to_markdown(index=False))
             return "\n\n".join(parts)
