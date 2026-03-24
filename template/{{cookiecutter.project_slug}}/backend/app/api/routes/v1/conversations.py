@@ -1,4 +1,3 @@
-{%- if cookiecutter.enable_conversation_persistence %}
 """Conversation API routes for AI chat persistence.
 
 Provides CRUD operations for conversations and messages.
@@ -14,7 +13,10 @@ The endpoints are:
 """
 
 {%- if cookiecutter.use_postgresql %}
+from typing import Any
 from uuid import UUID
+{%- else %}
+from typing import Any
 {%- endif %}
 
 from fastapi import APIRouter, Query, status
@@ -25,7 +27,7 @@ from app.api.deps import ConversationSvc
 from app.api.deps import DBSession, ConversationSvc
 {%- endif %}
 {%- if cookiecutter.use_jwt %}
-from app.api.deps import CurrentUser
+from app.api.deps import CurrentAdmin, CurrentUser
 {%- endif %}
 from app.schemas.conversation import (
     ConversationCreate,
@@ -45,6 +47,21 @@ router = APIRouter()
 {%- if cookiecutter.use_postgresql %}
 
 
+@router.get("/export")
+async def export_conversations(
+    conversation_service: ConversationSvc,
+{%- if cookiecutter.use_jwt %}
+    current_user: CurrentAdmin,
+{%- endif %}
+) -> Any:
+    """Export all conversations with messages and tool calls (admin only)."""
+    from fastapi.responses import JSONResponse
+
+    export_data = await conversation_service.export_all()
+    return JSONResponse(content={"conversations": export_data, "total": len(export_data)},
+        headers={"Content-Disposition": 'attachment; filename="conversations_export.json"'})
+
+
 @router.get("", response_model=ConversationList)
 async def list_conversations(
     conversation_service: ConversationSvc,
@@ -54,7 +71,7 @@ async def list_conversations(
     skip: int = Query(0, ge=0, description="Number of conversations to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum conversations to return"),
     include_archived: bool = Query(False, description="Include archived conversations"),
-):
+) -> Any:
     """List conversations for the current user.
 
     Returns conversations ordered by most recently updated.
@@ -67,7 +84,7 @@ async def list_conversations(
         limit=limit,
         include_archived=include_archived,
     )
-    return ConversationList(items=items, total=total)
+    return ConversationList(items=items, total=total)  # type: ignore[arg-type]
 
 
 @router.post("", response_model=ConversationRead, status_code=status.HTTP_201_CREATED)
@@ -77,7 +94,7 @@ async def create_conversation(
     current_user: CurrentUser,
 {%- endif %}
     data: ConversationCreate | None = None,
-):
+) -> Any:
     """Create a new conversation.
 
     The title is optional and can be set later.
@@ -97,12 +114,17 @@ async def get_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Get a conversation with all its messages.
 
     Raises 404 if the conversation does not exist.
     """
-    return await conversation_service.get_conversation(conversation_id, include_messages=True)
+    return await conversation_service.get_conversation(
+        conversation_id, include_messages=True,
+{%- if cookiecutter.use_jwt %}
+        user_id=current_user.id,
+{%- endif %}
+    )
 
 
 @router.patch("/{conversation_id}", response_model=ConversationRead)
@@ -113,27 +135,37 @@ async def update_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Update a conversation's title or archived status.
 
     Raises 404 if the conversation does not exist.
     """
-    return await conversation_service.update_conversation(conversation_id, data)
+    return await conversation_service.update_conversation(
+        conversation_id, data,
+{%- if cookiecutter.use_jwt %}
+        user_id=current_user.id,
+{%- endif %}
+    )
 
 
-@router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_conversation(
     conversation_id: UUID,
     conversation_service: ConversationSvc,
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> None:
     """Delete a conversation and all its messages.
 
     Raises 404 if the conversation does not exist.
     """
-    await conversation_service.delete_conversation(conversation_id)
+    await conversation_service.delete_conversation(
+        conversation_id,
+{%- if cookiecutter.use_jwt %}
+        user_id=current_user.id,
+{%- endif %}
+    )
 
 
 @router.post(
@@ -146,12 +178,17 @@ async def archive_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Archive a conversation.
 
     Archived conversations are hidden from the default list view.
     """
-    return await conversation_service.archive_conversation(conversation_id)
+    return await conversation_service.archive_conversation(
+        conversation_id,
+{%- if cookiecutter.use_jwt %}
+        user_id=current_user.id,
+{%- endif %}
+    )
 
 
 @router.get("/{conversation_id}/messages", response_model=MessageList)
@@ -163,13 +200,13 @@ async def list_messages(
 {%- endif %}
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-):
+) -> Any:
     """List messages in a conversation.
 
     Returns messages ordered by creation time (oldest first).
     """
-    items, total = await conversation_service.list_messages(conversation_id, skip=skip, limit=limit)
-    return MessageList(items=items, total=total)
+    items, total = await conversation_service.list_messages(conversation_id, skip=skip, limit=limit, include_tool_calls=True)
+    return MessageList(items=items, total=total)  # type: ignore[arg-type]
 
 
 @router.post(
@@ -184,7 +221,7 @@ async def add_message(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Add a message to a conversation.
 
     Raises 404 if the conversation does not exist.
@@ -193,6 +230,21 @@ async def add_message(
 
 
 {%- elif cookiecutter.use_sqlite %}
+
+
+@router.get("/export")
+def export_conversations(
+    conversation_service: ConversationSvc,
+{%- if cookiecutter.use_jwt %}
+    current_user: CurrentAdmin,
+{%- endif %}
+) -> Any:
+    """Export all conversations with messages and tool calls (admin only)."""
+    from fastapi.responses import JSONResponse
+
+    export_data = conversation_service.export_all()
+    return JSONResponse(content={"conversations": export_data, "total": len(export_data)},
+        headers={"Content-Disposition": 'attachment; filename="conversations_export.json"'})
 
 
 @router.get("", response_model=ConversationList)
@@ -204,7 +256,7 @@ def list_conversations(
     skip: int = Query(0, ge=0, description="Number of conversations to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum conversations to return"),
     include_archived: bool = Query(False, description="Include archived conversations"),
-):
+) -> Any:
     """List conversations for the current user.
 
     Returns conversations ordered by most recently updated.
@@ -217,7 +269,7 @@ def list_conversations(
         limit=limit,
         include_archived=include_archived,
     )
-    return ConversationList(items=items, total=total)
+    return ConversationList(items=items, total=total)  # type: ignore[arg-type]
 
 
 @router.post("", response_model=ConversationRead, status_code=status.HTTP_201_CREATED)
@@ -227,7 +279,7 @@ def create_conversation(
     current_user: CurrentUser,
 {%- endif %}
     data: ConversationCreate | None = None,
-):
+) -> Any:
     """Create a new conversation.
 
     The title is optional and can be set later.
@@ -247,7 +299,7 @@ def get_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Get a conversation with all its messages.
 
     Raises 404 if the conversation does not exist.
@@ -263,27 +315,37 @@ def update_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Update a conversation's title or archived status.
 
     Raises 404 if the conversation does not exist.
     """
-    return conversation_service.update_conversation(conversation_id, data)
+    return conversation_service.update_conversation(
+        conversation_id, data,
+{%- if cookiecutter.use_jwt %}
+        user_id=current_user.id,
+{%- endif %}
+    )
 
 
-@router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_conversation(
     conversation_id: str,
     conversation_service: ConversationSvc,
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> None:
     """Delete a conversation and all its messages.
 
     Raises 404 if the conversation does not exist.
     """
-    conversation_service.delete_conversation(conversation_id)
+    conversation_service.delete_conversation(
+        conversation_id,
+{%- if cookiecutter.use_jwt %}
+        user_id=current_user.id,
+{%- endif %}
+    )
 
 
 @router.post(
@@ -296,12 +358,17 @@ def archive_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Archive a conversation.
 
     Archived conversations are hidden from the default list view.
     """
-    return conversation_service.archive_conversation(conversation_id)
+    return conversation_service.archive_conversation(
+        conversation_id,
+{%- if cookiecutter.use_jwt %}
+        user_id=current_user.id,
+{%- endif %}
+    )
 
 
 @router.get("/{conversation_id}/messages", response_model=MessageList)
@@ -313,13 +380,13 @@ def list_messages(
 {%- endif %}
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-):
+) -> Any:
     """List messages in a conversation.
 
     Returns messages ordered by creation time (oldest first).
     """
-    items, total = conversation_service.list_messages(conversation_id, skip=skip, limit=limit)
-    return MessageList(items=items, total=total)
+    items, total = conversation_service.list_messages(conversation_id, skip=skip, limit=limit, include_tool_calls=True)
+    return MessageList(items=items, total=total)  # type: ignore[arg-type]
 
 
 @router.post(
@@ -334,7 +401,7 @@ def add_message(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Add a message to a conversation.
 
     Raises 404 if the conversation does not exist.
@@ -354,7 +421,7 @@ async def list_conversations(
     skip: int = Query(0, ge=0, description="Number of conversations to skip"),
     limit: int = Query(50, ge=1, le=100, description="Maximum conversations to return"),
     include_archived: bool = Query(False, description="Include archived conversations"),
-):
+) -> Any:
     """List conversations for the current user.
 
     Returns conversations ordered by most recently updated.
@@ -367,7 +434,7 @@ async def list_conversations(
         limit=limit,
         include_archived=include_archived,
     )
-    return ConversationList(items=items, total=total)
+    return ConversationList(items=items, total=total)  # type: ignore[arg-type]
 
 
 @router.post("", response_model=ConversationRead, status_code=status.HTTP_201_CREATED)
@@ -377,7 +444,7 @@ async def create_conversation(
     current_user: CurrentUser,
 {%- endif %}
     data: ConversationCreate | None = None,
-):
+) -> Any:
     """Create a new conversation.
 
     The title is optional and can be set later.
@@ -397,12 +464,17 @@ async def get_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Get a conversation with all its messages.
 
     Raises 404 if the conversation does not exist.
     """
-    return await conversation_service.get_conversation(conversation_id, include_messages=True)
+    return await conversation_service.get_conversation(
+        conversation_id, include_messages=True,
+{%- if cookiecutter.use_jwt %}
+        user_id=current_user.id,
+{%- endif %}
+    )
 
 
 @router.patch("/{conversation_id}", response_model=ConversationRead)
@@ -413,27 +485,37 @@ async def update_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Update a conversation's title or archived status.
 
     Raises 404 if the conversation does not exist.
     """
-    return await conversation_service.update_conversation(conversation_id, data)
+    return await conversation_service.update_conversation(
+        conversation_id, data,
+{%- if cookiecutter.use_jwt %}
+        user_id=current_user.id,
+{%- endif %}
+    )
 
 
-@router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_conversation(
     conversation_id: str,
     conversation_service: ConversationSvc,
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> None:
     """Delete a conversation and all its messages.
 
     Raises 404 if the conversation does not exist.
     """
-    await conversation_service.delete_conversation(conversation_id)
+    await conversation_service.delete_conversation(
+        conversation_id,
+{%- if cookiecutter.use_jwt %}
+        user_id=current_user.id,
+{%- endif %}
+    )
 
 
 @router.post(
@@ -446,12 +528,17 @@ async def archive_conversation(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Archive a conversation.
 
     Archived conversations are hidden from the default list view.
     """
-    return await conversation_service.archive_conversation(conversation_id)
+    return await conversation_service.archive_conversation(
+        conversation_id,
+{%- if cookiecutter.use_jwt %}
+        user_id=current_user.id,
+{%- endif %}
+    )
 
 
 @router.get("/{conversation_id}/messages", response_model=MessageList)
@@ -463,13 +550,13 @@ async def list_messages(
 {%- endif %}
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-):
+) -> Any:
     """List messages in a conversation.
 
     Returns messages ordered by creation time (oldest first).
     """
-    items, total = await conversation_service.list_messages(conversation_id, skip=skip, limit=limit)
-    return MessageList(items=items, total=total)
+    items, total = await conversation_service.list_messages(conversation_id, skip=skip, limit=limit, include_tool_calls=True)
+    return MessageList(items=items, total=total)  # type: ignore[arg-type]
 
 
 @router.post(
@@ -484,7 +571,7 @@ async def add_message(
 {%- if cookiecutter.use_jwt %}
     current_user: CurrentUser,
 {%- endif %}
-):
+) -> Any:
     """Add a message to a conversation.
 
     Raises 404 if the conversation does not exist.
@@ -492,7 +579,4 @@ async def add_message(
     return await conversation_service.add_message(conversation_id, data)
 
 
-{%- endif %}
-{%- else %}
-"""Conversation routes - not configured."""
 {%- endif %}

@@ -4,14 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
-import { LayoutDashboard{%- if cookiecutter.enable_ai_agent %}, MessageSquare{%- endif %} } from "lucide-react";
+import { LayoutDashboard, MessageSquare{%- if cookiecutter.enable_rag %}, Database{%- endif %}{%- if cookiecutter.use_jwt %}, UserCircle{%- endif %} } from "lucide-react";
 import { useSidebarStore } from "@/stores";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui";
 
 const navigation = [
   { name: "Dashboard", href: ROUTES.DASHBOARD, icon: LayoutDashboard },
-{%- if cookiecutter.enable_ai_agent %}
   { name: "Chat", href: ROUTES.CHAT, icon: MessageSquare },
+{%- if cookiecutter.enable_rag %}
+  { name: "Knowledge Base", href: ROUTES.RAG, icon: Database },
+{%- endif %}
+{%- if cookiecutter.use_jwt %}
+  { name: "Profile", href: ROUTES.PROFILE, icon: UserCircle },
 {%- endif %}
 ];
 
@@ -65,20 +69,14 @@ export function Sidebar() {
   const { isOpen, close } = useSidebarStore();
 
   return (
-    <>
-      <aside className="hidden w-64 shrink-0 border-r bg-background md:block">
-        <SidebarContent />
-      </aside>
-
-      <Sheet open={isOpen} onOpenChange={close}>
-        <SheetContent side="left" className="w-72 p-0">
-          <SheetHeader className="h-14 px-4">
-            <SheetTitle>{"{{ cookiecutter.project_name }}"}</SheetTitle>
-            <SheetClose onClick={close} />
-          </SheetHeader>
-          <NavLinks onNavigate={close} />
-        </SheetContent>
-      </Sheet>
-    </>
+    <Sheet open={isOpen} onOpenChange={close}>
+      <SheetContent side="left" className="w-72 p-0">
+        <SheetHeader className="h-14 px-4">
+          <SheetTitle>{"{{ cookiecutter.project_name }}"}</SheetTitle>
+          <SheetClose onClick={close} />
+        </SheetHeader>
+        <NavLinks onNavigate={close} />
+      </SheetContent>
+    </Sheet>
   );
 }

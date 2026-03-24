@@ -1,4 +1,4 @@
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 "use client";
 
 import { create } from "zustand";
@@ -71,6 +71,4 @@ export const useConversationStore = create<ConversationState>((set) => ({
 
   reset: () => set(initialState),
 }));
-{%- else %}
-// Conversation store - not configured (enable_conversation_persistence is false)
 {%- endif %}

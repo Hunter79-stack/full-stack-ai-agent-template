@@ -46,12 +46,12 @@ class User(TimestampMixin, SQLModel, table=True):
     hashed_password: str | None = Field(default=None, max_length=255)
     full_name: str | None = Field(default=None, max_length=255)
     is_active: bool = Field(default=True)
-    is_superuser: bool = Field(default=False)
     role: str = Field(default=UserRole.USER.value, max_length=50)
 {%- if cookiecutter.enable_oauth %}
-    oauth_provider: str | None = Field(default=None, max_length=50)
-    oauth_id: str | None = Field(default=None, max_length=255)
+    oauth_provider: str | None = Field(default=None, sa_column=Column(String(50), nullable=True, index=True))
+    oauth_id: str | None = Field(default=None, sa_column=Column(String(255), nullable=True, index=True))
 {%- endif %}
+    avatar_url: str | None = Field(default=None, sa_column=Column(String(500), nullable=True))
 
 {%- if cookiecutter.enable_session_management %}
 
@@ -122,12 +122,12 @@ class User(Base, TimestampMixin):
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     role: Mapped[str] = mapped_column(String(50), default=UserRole.USER.value, nullable=False)
 {%- if cookiecutter.enable_oauth %}
     oauth_provider: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     oauth_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
 {%- endif %}
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 {%- if cookiecutter.enable_session_management %}
 
@@ -202,12 +202,12 @@ class User(TimestampMixin, SQLModel, table=True):
     hashed_password: str | None = Field(default=None, max_length=255)
     full_name: str | None = Field(default=None, max_length=255)
     is_active: bool = Field(default=True)
-    is_superuser: bool = Field(default=False)
     role: str = Field(default=UserRole.USER.value, max_length=50)
 {%- if cookiecutter.enable_oauth %}
-    oauth_provider: str | None = Field(default=None, max_length=50)
-    oauth_id: str | None = Field(default=None, max_length=255)
+    oauth_provider: str | None = Field(default=None, sa_column=Column(String(50), nullable=True, index=True))
+    oauth_id: str | None = Field(default=None, sa_column=Column(String(255), nullable=True, index=True))
 {%- endif %}
+    avatar_url: str | None = Field(default=None, sa_column=Column(String(500), nullable=True))
 
 {%- if cookiecutter.enable_session_management %}
 
@@ -277,12 +277,12 @@ class User(Base, TimestampMixin):
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     role: Mapped[str] = mapped_column(String(50), default=UserRole.USER.value, nullable=False)
 {%- if cookiecutter.enable_oauth %}
     oauth_provider: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     oauth_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
 {%- endif %}
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 {%- if cookiecutter.enable_session_management %}
 
@@ -340,12 +340,12 @@ class User(Document):
     hashed_password: Optional[str] = None
     full_name: Optional[str] = None
     is_active: bool = True
-    is_superuser: bool = False
     role: str = UserRole.USER.value
 {%- if cookiecutter.enable_oauth %}
     oauth_provider: Optional[str] = None
     oauth_id: Optional[str] = None
 {%- endif %}
+    avatar_url: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: Optional[datetime] = None
 

@@ -1,4 +1,3 @@
-{%- if cookiecutter.enable_i18n %}
 import { getRequestConfig } from "next-intl/server";
 
 // Supported locales
@@ -29,9 +28,3 @@ export function getLocaleLabel(locale: Locale): string {
   };
   return labels[locale];
 }
-{%- else %}
-// i18n is disabled
-export const locales = ["en"] as const;
-export type Locale = (typeof locales)[number];
-export const defaultLocale: Locale = "en";
-{%- endif %}

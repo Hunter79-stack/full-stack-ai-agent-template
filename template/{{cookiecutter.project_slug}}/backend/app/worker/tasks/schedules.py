@@ -24,6 +24,15 @@ SCHEDULES = [
         "args": ["periodic-5min"],
     },
 ]
-{%- else %}
-# Taskiq not enabled for this project
+
+{%- if cookiecutter.enable_rag %}
+
+
+@broker.task(schedule=[{"cron": "* * * * *"}])  # Every minute
+async def scheduled_rag_sync_check() -> dict:
+    """Scheduled task: check for connector sources due for sync and dispatch."""
+    from app.worker.tasks.rag_tasks import check_scheduled_syncs
+    result = await check_scheduled_syncs.kiq()
+    return {"scheduled": True, "task_id": str(result.task_id)}
+{%- endif %}
 {%- endif %}

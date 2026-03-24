@@ -1,32 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
-import { useChat, useLocalChat } from "@/hooks";
+import { useEffect, useRef, useCallback, useState } from "react";
+import { useChat } from "@/hooks";
 import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
 import { ToolApprovalDialog } from "./tool-approval-dialog";
-import { Button } from "@/components/ui";
-import { Wifi, WifiOff, RotateCcw, Bot } from "lucide-react";
+import { Bot, ChevronDown, Check } from "lucide-react";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui";
 import type { PendingApproval, Decision } from "@/types";
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
 import { useConversationStore, useChatStore, useAuthStore } from "@/stores";
 import { useConversations } from "@/hooks";
-{%- endif %}
 
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
-interface ChatContainerProps {
-  useLocalStorage?: boolean;
-}
-
-export function ChatContainer({ useLocalStorage = false }: ChatContainerProps) {
-  const { isAuthenticated } = useAuthStore();
-
-  const shouldUseLocal = useLocalStorage || !isAuthenticated;
-
-  if (shouldUseLocal) {
-    return <LocalChatContainer />;
-  }
-
+export function ChatContainer() {
   return <AuthenticatedChatContainer />;
 }
 
@@ -48,6 +33,7 @@ function AuthenticatedChatContainer() {
     disconnect,
     sendMessage,
     clearMessages,
+    setModel,
     pendingApproval,
     sendResumeDecisions,
   } = useChat({
@@ -87,6 +73,7 @@ function AuthenticatedChatContainer() {
   // Load messages from conversation store when switching to a saved conversation
   useEffect(() => {
     if (currentMessages.length > 0) {
+      clearMessages();
       currentMessages.forEach((msg) => {
         addChatMessage({
           id: msg.id,
@@ -100,10 +87,13 @@ function AuthenticatedChatContainer() {
             result: tc.result,
             status: tc.status === "failed" ? "error" : tc.status,
           })),
+          fileIds: "files" in msg && Array.isArray((msg as unknown as { files?: unknown[] }).files)
+            ? ((msg as unknown as { files: { id: string }[] }).files).map((f) => f.id)
+            : undefined,
         });
       });
     }
-  }, [currentMessages, addChatMessage]);
+  }, [currentMessages, addChatMessage, clearMessages]);
 
   useEffect(() => {
     connect();
@@ -120,67 +110,63 @@ function AuthenticatedChatContainer() {
       isConnected={isConnected}
       isProcessing={isProcessing}
       sendMessage={sendMessage}
-      clearMessages={clearMessages}
+      onModelChange={setModel}
       messagesEndRef={messagesEndRef}
       pendingApproval={pendingApproval}
       onResumeDecisions={sendResumeDecisions}
     />
   );
 }
-{%- endif %}
 
-function LocalChatContainer() {
-  const {
-    messages,
-    isConnected,
-    isProcessing,
-    connect,
-    disconnect,
-    sendMessage,
-    clearMessages,
-    pendingApproval,
-    sendResumeDecisions,
-  } = useLocalChat();
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+function ModelSelector({ onChange }: { onChange: (model: string | null) => void }) {
+  const [availableModels, setAvailableModels] = useState<{value: string; label: string}[]>([
+    { value: "", label: "Default" },
+  ]);
+  const [selected, setSelected] = useState(availableModels[0]);
 
   useEffect(() => {
-    connect();
-    return () => disconnect();
-  }, [connect, disconnect]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    fetch("/api/v1/agent/models", { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.models) {
+          const models = [
+            { value: "", label: `Default (${data.default})` },
+            ...data.models.map((m: string) => ({ value: m, label: m })),
+          ];
+          setAvailableModels(models);
+          setSelected(models[0]);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
-    <ChatUI
-      messages={messages}
-      isConnected={isConnected}
-      isProcessing={isProcessing}
-      sendMessage={sendMessage}
-      clearMessages={clearMessages}
-      messagesEndRef={messagesEndRef}
-      pendingApproval={pendingApproval}
-      onResumeDecisions={sendResumeDecisions}
-    />
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors">
+          {selected.label}
+          <ChevronDown className="h-3 w-3" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        {availableModels.map((m) => (
+          <DropdownMenuItem key={m.value} onClick={() => { setSelected(m); onChange(m.value || null); }} className="flex items-center justify-between text-xs">
+            {m.label}
+            {selected.value === m.value && <Check className="h-3.5 w-3.5" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
-
-{%- if not (cookiecutter.enable_conversation_persistence and cookiecutter.use_database) %}
-export function ChatContainer() {
-  return <LocalChatContainer />;
-}
-{%- endif %}
 
 interface ChatUIProps {
   messages: import("@/types").ChatMessage[];
   isConnected: boolean;
   isProcessing: boolean;
-  sendMessage: (content: string) => void;
-  clearMessages: () => void;
+  sendMessage: (content: string, fileIds?: string[]) => void;
+  onModelChange?: (model: string | null) => void;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
-  // Human-in-the-Loop support
   pendingApproval?: PendingApproval | null;
   onResumeDecisions?: (decisions: Decision[]) => void;
 }
@@ -190,7 +176,7 @@ function ChatUI({
   isConnected,
   isProcessing,
   sendMessage,
-  clearMessages,
+  onModelChange,
   messagesEndRef,
   pendingApproval,
   onResumeDecisions,
@@ -227,32 +213,23 @@ function ChatUI({
       )}
 
       <div className="px-2 pb-2 sm:px-4 sm:pb-4">
-        <div className="rounded-xl border bg-card shadow-sm p-3 sm:p-4">
-          <ChatInput
-            onSend={sendMessage}
-            disabled={!isConnected || isProcessing || !!pendingApproval}
-            isProcessing={isProcessing}
-          />
-          <div className="flex items-center justify-between mt-3 pt-3 border-t">
-            <div className="flex items-center gap-2">
-              {isConnected ? (
-                <Wifi className="h-3.5 w-3.5 text-green-500" />
-              ) : (
-                <WifiOff className="h-3.5 w-3.5 text-red-500" />
-              )}
-              <span className="text-xs text-muted-foreground">
-                {isConnected ? "Connected" : "Disconnected"}
-              </span>
+        <div className="rounded-xl border bg-card shadow-sm">
+          <div className="px-3 pt-3 sm:px-4 sm:pt-4">
+            <ChatInput
+              onSend={sendMessage}
+              disabled={!isConnected || !!pendingApproval}
+              isProcessing={isProcessing}
+            />
+          </div>
+          <div className="flex items-center justify-between px-3 pb-2 sm:px-4 sm:pb-3">
+            <div className="flex items-center gap-1">
+              <span
+                className={`inline-block h-1.5 w-1.5 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`}
+              />
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearMessages}
-              className="text-xs h-8 px-3"
-            >
-              <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-              Reset
-            </Button>
+            {onModelChange && (
+              <ModelSelector onChange={onModelChange} />
+            )}
           </div>
         </div>
       </div>

@@ -4,7 +4,7 @@
 
 import uuid
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, UUID as PG_UUID
@@ -13,7 +13,7 @@ from sqlmodel import Field, Relationship, SQLModel
 from app.db.base import TimestampMixin
 
 
-class WebhookEventType(str, Enum):
+class WebhookEventType(StrEnum):
     """Webhook event types."""
 
     # User events
@@ -22,9 +22,7 @@ class WebhookEventType(str, Enum):
     USER_DELETED = "user.deleted"
 
     # Custom events (extend as needed)
-    ITEM_CREATED = "item.created"
-    ITEM_UPDATED = "item.updated"
-    ITEM_DELETED = "item.deleted"
+    CUSTOM_EVENT = "custom.event"
 
 
 class Webhook(TimestampMixin, SQLModel, table=True):
@@ -46,7 +44,7 @@ class Webhook(TimestampMixin, SQLModel, table=True):
 {%- if cookiecutter.use_jwt %}
     user_id: uuid.UUID | None = Field(
         default=None,
-        sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True),
     )
 {%- endif %}
 
@@ -67,7 +65,7 @@ class WebhookDelivery(SQLModel, table=True):
         sa_column=Column(PG_UUID(as_uuid=True), primary_key=True),
     )
     webhook_id: uuid.UUID = Field(
-        sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("webhooks.id"), nullable=False),
+        sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("webhooks.id"), nullable=False, index=True),
     )
     event_type: str = Field(max_length=100)
     payload: str = Field(sa_column=Column(Text, nullable=False))
@@ -76,7 +74,7 @@ class WebhookDelivery(SQLModel, table=True):
     error_message: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     attempt_count: int = Field(default=1)
     success: bool = Field(default=False)
-    created_at: datetime = Field(sa_column=Column(DateTime, nullable=False))
+    created_at: datetime = Field(sa_column=Column(DateTime, nullable=False, index=True))
     delivered_at: datetime | None = Field(
         default=None,
         sa_column=Column(DateTime, nullable=True),
@@ -91,7 +89,7 @@ class WebhookDelivery(SQLModel, table=True):
 
 import uuid
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
@@ -100,7 +98,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin
 
 
-class WebhookEventType(str, Enum):
+class WebhookEventType(StrEnum):
     """Webhook event types."""
 
     # User events
@@ -109,9 +107,7 @@ class WebhookEventType(str, Enum):
     USER_DELETED = "user.deleted"
 
     # Custom events (extend as needed)
-    ITEM_CREATED = "item.created"
-    ITEM_UPDATED = "item.updated"
-    ITEM_DELETED = "item.deleted"
+    CUSTOM_EVENT = "custom.event"
 
 
 class Webhook(Base, TimestampMixin):
@@ -132,7 +128,7 @@ class Webhook(Base, TimestampMixin):
     # Optional: Associate webhook with a user
 {%- if cookiecutter.use_jwt %}
     user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True
     )
 {%- endif %}
 
@@ -151,7 +147,7 @@ class WebhookDelivery(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     webhook_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("webhooks.id"), nullable=False
+        UUID(as_uuid=True), ForeignKey("webhooks.id"), nullable=False, index=True
     )
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     payload: Mapped[str] = mapped_column(Text, nullable=False)
@@ -161,7 +157,7 @@ class WebhookDelivery(Base):
     attempt_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     success: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False
+        DateTime, default=datetime.utcnow, nullable=False, index=True
     )
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -175,7 +171,7 @@ class WebhookDelivery(Base):
 import json
 import uuid
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlmodel import Field, Relationship, SQLModel
@@ -183,7 +179,7 @@ from sqlmodel import Field, Relationship, SQLModel
 from app.db.base import TimestampMixin
 
 
-class WebhookEventType(str, Enum):
+class WebhookEventType(StrEnum):
     """Webhook event types."""
 
     # User events
@@ -192,9 +188,7 @@ class WebhookEventType(str, Enum):
     USER_DELETED = "user.deleted"
 
     # Custom events (extend as needed)
-    ITEM_CREATED = "item.created"
-    ITEM_UPDATED = "item.updated"
-    ITEM_DELETED = "item.deleted"
+    CUSTOM_EVENT = "custom.event"
 
 
 class Webhook(TimestampMixin, SQLModel, table=True):
@@ -217,7 +211,7 @@ class Webhook(TimestampMixin, SQLModel, table=True):
 {%- if cookiecutter.use_jwt %}
     user_id: str | None = Field(
         default=None,
-        sa_column=Column(String(36), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(String(36), ForeignKey("users.id"), nullable=True, index=True),
     )
 {%- endif %}
 
@@ -247,7 +241,7 @@ class WebhookDelivery(SQLModel, table=True):
         sa_column=Column(String(36), primary_key=True),
     )
     webhook_id: str = Field(
-        sa_column=Column(String(36), ForeignKey("webhooks.id"), nullable=False),
+        sa_column=Column(String(36), ForeignKey("webhooks.id"), nullable=False, index=True),
     )
     event_type: str = Field(max_length=100)
     payload: str = Field(sa_column=Column(Text, nullable=False))
@@ -256,7 +250,7 @@ class WebhookDelivery(SQLModel, table=True):
     error_message: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     attempt_count: int = Field(default=1)
     success: bool = Field(default=False)
-    created_at: datetime = Field(sa_column=Column(DateTime, nullable=False))
+    created_at: datetime = Field(sa_column=Column(DateTime, nullable=False, index=True))
     delivered_at: datetime | None = Field(
         default=None,
         sa_column=Column(DateTime, nullable=True),
@@ -271,7 +265,7 @@ class WebhookDelivery(SQLModel, table=True):
 import json
 import uuid
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -279,7 +273,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin
 
 
-class WebhookEventType(str, Enum):
+class WebhookEventType(StrEnum):
     """Webhook event types."""
 
     # User events
@@ -288,9 +282,7 @@ class WebhookEventType(str, Enum):
     USER_DELETED = "user.deleted"
 
     # Custom events (extend as needed)
-    ITEM_CREATED = "item.created"
-    ITEM_UPDATED = "item.updated"
-    ITEM_DELETED = "item.deleted"
+    CUSTOM_EVENT = "custom.event"
 
 
 class Webhook(Base, TimestampMixin):
@@ -311,7 +303,7 @@ class Webhook(Base, TimestampMixin):
 
 {%- if cookiecutter.use_jwt %}
     user_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=True
+        String(36), ForeignKey("users.id"), nullable=True, index=True
     )
 {%- endif %}
 
@@ -339,7 +331,7 @@ class WebhookDelivery(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     webhook_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("webhooks.id"), nullable=False
+        String(36), ForeignKey("webhooks.id"), nullable=False, index=True
     )
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     payload: Mapped[str] = mapped_column(Text, nullable=False)
@@ -349,7 +341,7 @@ class WebhookDelivery(Base):
     attempt_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     success: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False
+        DateTime, default=datetime.utcnow, nullable=False, index=True
     )
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -360,14 +352,14 @@ class WebhookDelivery(Base):
 """Webhook document models (MongoDB)."""
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Optional
 
 from beanie import Document
 from pydantic import Field
 
 
-class WebhookEventType(str, Enum):
+class WebhookEventType(StrEnum):
     """Webhook event types."""
 
     # User events
@@ -375,10 +367,8 @@ class WebhookEventType(str, Enum):
     USER_UPDATED = "user.updated"
     USER_DELETED = "user.deleted"
 
-    # Custom events
-    ITEM_CREATED = "item.created"
-    ITEM_UPDATED = "item.updated"
-    ITEM_DELETED = "item.deleted"
+    # Custom events (extend as needed)
+    CUSTOM_EVENT = "custom.event"
 
 
 class WebhookDelivery(Document):

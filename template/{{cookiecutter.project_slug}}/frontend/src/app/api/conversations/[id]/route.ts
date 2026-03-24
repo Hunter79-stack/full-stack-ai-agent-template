@@ -1,4 +1,4 @@
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 {% raw %}import { NextRequest, NextResponse } from "next/server";
 import { backendFetch, BackendApiError } from "@/lib/server-api";
 
@@ -103,6 +103,4 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     );
   }
 }{% endraw %}
-{%- else %}
-// Conversation detail API route - not configured (enable_conversation_persistence is false)
 {%- endif %}

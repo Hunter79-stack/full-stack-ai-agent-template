@@ -26,8 +26,13 @@ async def shutdown(ctx: dict[str, Any]) -> None:
     # Add any cleanup here
 
 
+{%- if cookiecutter.enable_rag %}
+from app.worker.tasks.rag_tasks import sync_single_source_task, check_scheduled_syncs
+{%- endif %}
+
 # === Example Tasks ===
 # Tasks are defined as regular async functions
+
 
 
 async def example_task(ctx: dict[str, Any], message: str) -> dict[str, Any]:
@@ -142,12 +147,18 @@ class WorkerSettings:
         example_task,
         long_running_task,
         send_email_task,
+{%- if cookiecutter.enable_rag %}
+        sync_single_source_task,
+{%- endif %}
     ]
 
     # Scheduled/cron jobs
     cron_jobs = [
         cron(scheduled_example, minute={0, 15, 30, 45}),  # Every 15 minutes
         # cron(scheduled_example, minute=0, hour=0),  # Daily at midnight
+{%- if cookiecutter.enable_rag %}
+        cron(check_scheduled_syncs),  # Every minute (default: all fields = any)
+{%- endif %}
     ]
 
     # Worker lifecycle hooks

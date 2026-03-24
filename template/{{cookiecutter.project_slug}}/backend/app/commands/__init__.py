@@ -22,6 +22,7 @@ import importlib
 import pkgutil
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -30,7 +31,7 @@ _commands: list[click.Command] = []
 _discovered = False
 
 
-def command(name: str | None = None, **kwargs) -> Callable:
+def command(name: str | None = None, **kwargs: Any) -> Callable[..., Any]:
     """
     Decorator to register a custom command.
 
@@ -45,9 +46,9 @@ def command(name: str | None = None, **kwargs) -> Callable:
             click.echo(f"Seeding {count} records...")
     """
 
-    def decorator(func: Callable) -> click.Command:
+    def decorator(func: Callable[..., Any]) -> click.Command:
         cmd_name = name or func.__name__.replace("_", "-")
-        cmd = click.command(cmd_name, **kwargs)(func)
+        cmd: click.Command = click.command(cmd_name, **kwargs)(func)  # type: ignore[no-untyped-call]
         _commands.append(cmd)
         return cmd
 

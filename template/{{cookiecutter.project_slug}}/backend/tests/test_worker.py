@@ -13,30 +13,22 @@ class TestExampleTask:
         """Test example_task completes successfully."""
         from app.worker.tasks.examples import example_task
 
-        # Create a mock for self (the task)
-        mock_self = MagicMock()
-        mock_self.request.id = "test-task-id"
-
         with patch("app.worker.tasks.examples.time.sleep"):
-            result = example_task.run(mock_self, "test message")
+            result = example_task.run("test message")
 
         assert result["status"] == "completed"
         assert "test message" in result["message"]
-        assert result["task_id"] == "test-task-id"
+        assert "task_id" in result
 
     def test_example_task_retry_on_error(self):
         """Test example_task retries on error."""
         from app.worker.tasks.examples import example_task
 
-        mock_self = MagicMock()
-        mock_self.request.id = "test-task-id"
-        mock_self.request.retries = 0
-
-        with patch("app.worker.tasks.examples.time.sleep", side_effect=Exception("Test error")):
-            mock_self.retry = MagicMock(side_effect=Exception("Retry"))
+        with patch("app.worker.tasks.examples.time.sleep", side_effect=Exception("Test error")), \
+             patch.object(example_task, "retry", side_effect=Exception("Retry")) as mock_retry:
             with pytest.raises(Exception, match="Retry"):
-                example_task.run(mock_self, "test message")
-            mock_self.retry.assert_called_once()
+                example_task.run("test message")
+            mock_retry.assert_called_once()
 
 
 class TestLongRunningTask:
@@ -46,16 +38,13 @@ class TestLongRunningTask:
         """Test long_running_task completes with progress."""
         from app.worker.tasks.examples import long_running_task
 
-        mock_self = MagicMock()
-        mock_self.request.id = "test-task-id"
-
-        with patch("app.worker.tasks.examples.time.sleep"):
-            result = long_running_task.run(mock_self, duration=3)
+        with patch("app.worker.tasks.examples.time.sleep"), \
+             patch.object(long_running_task, "update_state") as mock_update:
+            result = long_running_task.run(duration=3)
 
         assert result["status"] == "completed"
         assert result["duration"] == 3
-        # Check progress updates were made
-        assert mock_self.update_state.call_count == 3
+        assert mock_update.call_count == 3
 
 
 class TestSendEmailTask:

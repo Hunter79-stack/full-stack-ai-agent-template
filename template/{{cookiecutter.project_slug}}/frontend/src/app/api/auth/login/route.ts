@@ -19,9 +19,14 @@ export async function POST(request: NextRequest) {
       body: formData.toString(),
     });
 
+    // Fetch user profile with the new token
+    const user = await backendFetch("/api/v1/auth/me", {
+      headers: { Authorization: `Bearer ${data.access_token}` },
+    });
+
     // Set HTTP-only cookies for tokens
     const response = NextResponse.json({
-      user: data.user,
+      user,
       message: "Login successful",
     });
 

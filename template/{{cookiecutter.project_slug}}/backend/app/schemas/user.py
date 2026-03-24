@@ -51,8 +51,11 @@ class UserRead(UserBase, TimestampSchema):
 {%- elif cookiecutter.use_sqlite or cookiecutter.use_mongodb %}
     id: str
 {%- endif %}
-    is_superuser: bool = False
     role: UserRole = UserRole.USER
+{%- if cookiecutter.enable_oauth %}
+    oauth_provider: str | None = None
+{%- endif %}
+    avatar_url: str | None = None
 
 
 class UserInDB(UserRead):

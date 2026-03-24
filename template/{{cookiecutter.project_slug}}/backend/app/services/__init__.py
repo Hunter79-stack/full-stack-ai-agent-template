@@ -4,7 +4,7 @@ Services orchestrate business operations, using repositories for data access
 and raising domain exceptions for error handling.
 """
 {%- set services = [] %}
-{%- if cookiecutter.use_jwt or cookiecutter.include_example_crud or cookiecutter.enable_conversation_persistence or cookiecutter.enable_webhooks %}
+{%- if cookiecutter.use_jwt or cookiecutter.enable_webhooks or cookiecutter.enable_rag %}
 # ruff: noqa: I001, RUF022 - Imports structured for Jinja2 template conditionals
 {%- endif %}
 {%- if cookiecutter.use_jwt %}
@@ -17,12 +17,7 @@ from app.services.user import UserService
 
 from app.services.session import SessionService
 {%- endif %}
-{%- if cookiecutter.include_example_crud and cookiecutter.use_database %}
-{%- set _ = services.append("ItemService") %}
-
-from app.services.item import ItemService
-{%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 {%- set _ = services.append("ConversationService") %}
 
 from app.services.conversation import ConversationService
@@ -31,6 +26,22 @@ from app.services.conversation import ConversationService
 {%- set _ = services.append("WebhookService") %}
 
 from app.services.webhook import WebhookService
+{%- endif %}
+{%- if cookiecutter.enable_rag and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+{%- set _ = services.append("RAGDocumentService") %}
+
+from app.services.rag_document import RAGDocumentService
+{%- set _ = services.append("RAGSyncService") %}
+
+from app.services.rag_sync import RAGSyncService
+{%- set _ = services.append("SyncSourceService") %}
+
+from app.services.sync_source import SyncSourceService
+{%- endif %}
+{%- if cookiecutter.use_jwt and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+{%- set _ = services.append("FileUploadService") %}
+
+from app.services.file_upload import FileUploadService
 {%- endif %}
 {%- if services %}
 

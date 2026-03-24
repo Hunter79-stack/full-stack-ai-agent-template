@@ -1,5 +1,32 @@
 .PHONY: install format lint test run clean help db-init
 
+# === Quick Start (one command to rule them all) ===
+{%- if cookiecutter.enable_docker %}
+quickstart: install docker-up
+{%- if cookiecutter.use_postgresql or cookiecutter.use_sqlite %}
+	@echo "Waiting for database to be ready..."
+	@sleep 8
+	@echo "Creating initial migration..."
+	cd backend && uv run {{ cookiecutter.project_slug }} db migrate -m "initial" || true
+	@echo "Applying migrations..."
+	cd backend && uv run {{ cookiecutter.project_slug }} db upgrade
+{%- endif %}
+{%- if cookiecutter.use_jwt %}
+	@echo "Creating admin user (admin@example.com / admin123)..."
+	cd backend && uv run {{ cookiecutter.project_slug }} user create --email admin@example.com --password admin123 --superuser 2>/dev/null || true
+{%- endif %}
+	@echo ""
+	@echo "🚀 Ready! All services running:"
+	@echo "   API:      http://localhost:{{ cookiecutter.backend_port }}"
+	@echo "   Docs:     http://localhost:{{ cookiecutter.backend_port }}/docs"
+{%- if cookiecutter.use_frontend %}
+	@echo "   Frontend: Run 'cd frontend && bun install && bun dev' or 'make docker-frontend'"
+{%- endif %}
+{%- if cookiecutter.use_jwt %}
+	@echo "   Admin:    http://localhost:{{ cookiecutter.backend_port }}/admin (admin@example.com / admin123)"
+{%- endif %}
+{%- endif %}
+
 # === Setup ===
 install:
 	uv sync --directory backend --dev
@@ -52,13 +79,15 @@ test-cov:
 {%- if cookiecutter.use_postgresql and cookiecutter.enable_docker %}
 db-init: docker-db
 	@echo "Waiting for PostgreSQL to be ready..."
-	@sleep 3
-	uv run --directory backend {{ cookiecutter.project_slug }} db upgrade
+	@sleep 8
+	cd backend && uv run {{ cookiecutter.project_slug }} db migrate -m "initial" || true
+	cd backend && uv run {{ cookiecutter.project_slug }} db upgrade
 	@echo ""
 	@echo "✅ Database initialized!"
 {%- else %}
 db-init:
-	uv run --directory backend {{ cookiecutter.project_slug }} db upgrade
+	cd backend && uv run {{ cookiecutter.project_slug }} db migrate -m "initial" || true
+	cd backend && uv run {{ cookiecutter.project_slug }} db upgrade
 	@echo ""
 	@echo "✅ Database initialized!"
 {%- endif %}
@@ -133,6 +162,7 @@ taskiq-scheduler:
 
 # === Docker: Backend (Development) ===
 docker-up:
+	docker-compose build app
 	docker-compose up -d
 	@echo ""
 	@echo "✅ Backend services started!"
@@ -232,6 +262,24 @@ docker-redis:
 docker-redis-stop:
 	docker-compose stop redis
 {%- endif %}
+
+{%- if cookiecutter.use_frontend %}
+
+# === Vercel (Frontend Deployment) ===
+vercel-deploy:
+	cd frontend && npx vercel --prod
+	@echo ""
+	@echo "✅ Frontend deployed to Vercel!"
+	@echo "   Set environment variables in Vercel dashboard:"
+	@echo "   BACKEND_URL=https://api.your-domain.com"
+	@echo "   BACKEND_WS_URL=wss://api.your-domain.com"
+{%- if cookiecutter.use_jwt %}
+	@echo "   NEXT_PUBLIC_AUTH_ENABLED=true"
+{%- endif %}
+{%- if cookiecutter.enable_rag %}
+	@echo "   NEXT_PUBLIC_RAG_ENABLED=true"
+{%- endif %}
+{%- endif %}
 {%- endif %}
 
 # === Cleanup ===
@@ -248,6 +296,11 @@ help:
 	@echo "{{ cookiecutter.project_name }} - Available Commands"
 	@echo "======================================"
 	@echo ""
+{%- if cookiecutter.enable_docker %}
+	@echo "Quick Start:"
+	@echo "  make quickstart    Install + start all services + setup DB"
+	@echo ""
+{%- endif %}
 	@echo "Setup:"
 	@echo "  make install       Install dependencies + pre-commit hooks"
 	@echo ""
@@ -271,6 +324,16 @@ help:
 	@echo "  make create-admin  Create admin user (for SQLAdmin access)"
 	@echo "  make user-create   Create new user (interactive)"
 	@echo "  make user-list     List all users"
+	@echo ""
+{%- endif %}
+{%- if cookiecutter.enable_rag %}
+	@echo "RAG:"
+	@echo "  uv run {{ cookiecutter.project_slug }} rag-ingest <path> -c <collection>  Ingest files"
+	@echo "  uv run {{ cookiecutter.project_slug }} rag-search <query> -c <collection>  Search"
+	@echo "  uv run {{ cookiecutter.project_slug }} rag-collections                     List collections"
+	@echo "  uv run {{ cookiecutter.project_slug }} rag-sources                         List sync sources"
+	@echo "  uv run {{ cookiecutter.project_slug }} rag-source-add                      Add sync source"
+	@echo "  uv run {{ cookiecutter.project_slug }} rag-source-sync <id>                Trigger sync"
 	@echo ""
 {%- endif %}
 {%- if cookiecutter.use_celery %}

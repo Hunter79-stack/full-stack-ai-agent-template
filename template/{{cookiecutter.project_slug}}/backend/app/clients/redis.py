@@ -26,7 +26,7 @@ class RedisClient:
 
     async def connect(self) -> None:
         """Connect to Redis server."""
-        self.client = aioredis.from_url(
+        self.client = aioredis.from_url(  # type: ignore[no-untyped-call]
             self.url,
             encoding="utf-8",
             decode_responses=True,
@@ -42,7 +42,7 @@ class RedisClient:
         """Get a value by key."""
         if not self.client:
             raise RuntimeError("Redis client not connected")
-        return await self.client.get(key)
+        return await self.client.get(key)  # type: ignore[no-any-return]
 
     async def set(
         self,
@@ -59,7 +59,7 @@ class RedisClient:
         """Delete a key. Returns number of keys deleted."""
         if not self.client:
             raise RuntimeError("Redis client not connected")
-        return await self.client.delete(key)
+        return await self.client.delete(key)  # type: ignore[no-any-return]
 
     async def exists(self, key: str) -> bool:
         """Check if key exists."""

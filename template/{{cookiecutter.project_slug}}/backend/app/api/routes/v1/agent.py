@@ -1,9 +1,10 @@
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_pydantic_ai %}
+{%- if cookiecutter.use_pydantic_ai %}
 """AI Agent WebSocket routes with streaming support (PydanticAI)."""
 
 import logging
 from typing import Any
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+from sqlalchemy import select
+{%- if cookiecutter.use_database %}
 from datetime import datetime, UTC
 {%- if cookiecutter.use_postgresql %}
 from uuid import UUID
@@ -38,18 +39,29 @@ from app.db.models.user import User
 {%- if cookiecutter.websocket_auth_api_key %}
 from app.core.config import settings
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
-from app.db.session import get_db_context
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+from app.db.session import get_db_context{% if cookiecutter.use_sqlite %}, get_db_session
+from contextlib import contextmanager{% endif %}
 from app.api.deps import ConversationSvc, get_conversation_service
-from app.schemas.conversation import ConversationCreate, MessageCreate, ToolCallCreate, ToolCallComplete
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+from app.schemas.conversation import ConversationCreate, ConversationUpdate, MessageCreate, ToolCallCreate, ToolCallComplete
+{%- elif cookiecutter.use_mongodb %}
 from app.api.deps import ConversationSvc, get_conversation_service
-from app.schemas.conversation import ConversationCreate, MessageCreate, ToolCallCreate, ToolCallComplete
+from app.schemas.conversation import ConversationCreate, ConversationUpdate, MessageCreate, ToolCallCreate, ToolCallComplete
 {%- endif %}
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/agent/models")
+async def list_models() -> dict[str, Any]:
+    """Return available LLM models and the current default."""
+    from app.core.config import settings
+    return {
+        "default": settings.AI_MODEL,
+        "models": settings.AI_AVAILABLE_MODELS,
+    }
 
 
 class AgentConnectionManager:
@@ -134,7 +146,7 @@ async def agent_websocket(
     Expected input message format:
     {
         "message": "user message here",
-        "history": [{"role": "user|assistant|system", "content": "..."}]{% if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %},
+        "history": [{"role": "user|assistant|system", "content": "..."}]{% if cookiecutter.use_database %},
         "conversation_id": "optional-uuid-to-continue-existing-conversation"{% endif %}
     }
 {%- if cookiecutter.websocket_auth_jwt %}
@@ -145,7 +157,7 @@ async def agent_websocket(
     Authentication: Requires a valid API key passed as 'api_key' query parameter.
     Example: ws://localhost:{{ cookiecutter.backend_port }}/api/v1/ws/agent?api_key=your-api-key
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 
     Persistence: Set 'conversation_id' to continue an existing conversation.
     If not provided, a new conversation is created. The conversation_id is
@@ -164,7 +176,7 @@ async def agent_websocket(
     # Conversation state per connection
     conversation_history: list[dict[str, str]] = []
     deps = Deps()
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
     current_conversation_id: str | None = None
 {%- endif %}
 
@@ -173,15 +185,13 @@ async def agent_websocket(
             # Receive user message
             data = await websocket.receive_json()
             user_message = data.get("message", "")
-            # Optionally accept history from client (or use server-side tracking)
-            if "history" in data:
-                conversation_history = data["history"]
+            file_ids = data.get("file_ids", [])
 
-            if not user_message:
+            if not user_message and not file_ids:
                 await manager.send_event(websocket, "error", {"message": "Empty message"})
                 continue
 
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
 
             # Handle conversation persistence
             try:
@@ -193,8 +203,11 @@ async def agent_websocket(
                     requested_conv_id = data.get("conversation_id")
                     if requested_conv_id:
                         current_conversation_id = requested_conv_id
-                        # Verify conversation exists
-                        await conv_service.get_conversation(UUID(requested_conv_id))
+                        # Verify conversation exists and update title if empty
+                        conv = await conv_service.get_conversation(UUID(requested_conv_id))
+                        if not conv.title and user_message:
+                            title = user_message[:50] if len(user_message) > 50 else user_message
+                            await conv_service.update_conversation(UUID(requested_conv_id), ConversationUpdate(title=title))
                     elif not current_conversation_id:
                         # Create new conversation
                         conv_data = ConversationCreate(
@@ -212,19 +225,28 @@ async def agent_websocket(
                         )
 
                     # Save user message
-                    await conv_service.add_message(
+                    user_msg = await conv_service.add_message(
                         UUID(current_conversation_id),
                         MessageCreate(role="user", content=user_message),
                     )
+                    # Link uploaded files to this message
+                    if file_ids:
+                        try:
+                            await conv_service.link_files_to_message(user_msg.id, file_ids)
+                        except Exception as e:
+                            logger.warning(f"Failed to link files: {e}")
 {%- else %}
-                with get_db_session() as db:
+                with contextmanager(get_db_session)() as db:
                     conv_service = get_conversation_service(db)
 
                     # Get or create conversation
                     requested_conv_id = data.get("conversation_id")
                     if requested_conv_id:
                         current_conversation_id = requested_conv_id
-                        conv_service.get_conversation(requested_conv_id)
+                        conv = conv_service.get_conversation(requested_conv_id)
+                        if not conv.title and user_message:
+                            title = user_message[:50] if len(user_message) > 50 else user_message
+                            conv_service.update_conversation(requested_conv_id, ConversationUpdate(title=title))
                     elif not current_conversation_id:
                         # Create new conversation
                         conv_data = ConversationCreate(
@@ -242,15 +264,21 @@ async def agent_websocket(
                         )
 
                     # Save user message
-                    conv_service.add_message(
+                    user_msg = conv_service.add_message(
                         current_conversation_id,
                         MessageCreate(role="user", content=user_message),
                     )
+                    # Link uploaded files to this message
+                    if file_ids:
+                        try:
+                            conv_service.link_files_to_message(user_msg.id, file_ids)
+                        except Exception as e:
+                            logger.warning(f"Failed to link files: {e}")
 {%- endif %}
             except Exception as e:
                 logger.warning(f"Failed to persist conversation: {e}")
                 # Continue without persistence
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+{%- elif cookiecutter.use_mongodb %}
 
             # Handle conversation persistence (MongoDB)
             conv_service = get_conversation_service()
@@ -258,7 +286,10 @@ async def agent_websocket(
             requested_conv_id = data.get("conversation_id")
             if requested_conv_id:
                 current_conversation_id = requested_conv_id
-                await conv_service.get_conversation(requested_conv_id)
+                conv = await conv_service.get_conversation(requested_conv_id)
+                if not conv.title and user_message:
+                    title = user_message[:50] if len(user_message) > 50 else user_message
+                    await conv_service.update_conversation(requested_conv_id, ConversationUpdate(title=title))
             elif not current_conversation_id:
                 conv_data = ConversationCreate(
 {%- if cookiecutter.websocket_auth_jwt %}
@@ -284,21 +315,79 @@ async def agent_websocket(
             await manager.send_event(websocket, "user_prompt", {"content": user_message})
 
             try:
-                assistant = get_agent()
+                selected_model = data.get("model")
+                assistant = get_agent(model_name=selected_model)
                 model_history = build_message_history(conversation_history)
+
+                # Collect tool calls during streaming for persistence
+                collected_tool_calls: list[dict[str, Any]] = []
+
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+                # Load attached files and build multimodal input
+                from pydantic_ai.messages import BinaryContent
+                from app.db.models.chat_file import ChatFile as ChatFileModel
+                from app.services.file_storage import get_file_storage
+
+                user_input: str | list[Any] = user_message
+                file_context_parts: list[str] = []
+
+                if file_ids:
+                    storage = get_file_storage()
+                    image_parts = []
+{%- if cookiecutter.use_postgresql %}
+                    async with get_db_context() as file_db:
+                        for fid in file_ids:
+                            try:
+                                result = await file_db.execute(select(ChatFileModel).where(ChatFileModel.id == UUID(fid)))
+                                chat_file = result.scalar_one_or_none()
+                                if not chat_file:
+                                    continue
+                                if chat_file.file_type == "image":
+                                    file_data = await storage.load(chat_file.storage_path)
+                                    image_parts.append(BinaryContent(data=file_data, media_type=chat_file.mime_type))
+                                elif chat_file.parsed_content:
+                                    file_context_parts.append(f"\n---\nAttached file: {chat_file.filename}\n```\n{chat_file.parsed_content}\n```")
+                            except Exception as e:
+                                logger.warning(f"Failed to load file {fid}: {e}")
+{%- else %}
+                    with contextmanager(get_db_session)() as file_db:
+                        for fid in file_ids:
+                            try:
+                                result = file_db.execute(select(ChatFileModel).where(ChatFileModel.id == fid))
+                                chat_file = result.scalar_one_or_none()
+                                if not chat_file:
+                                    continue
+                                if chat_file.file_type == "image":
+                                    file_data = await storage.load(chat_file.storage_path)
+                                    image_parts.append(BinaryContent(data=file_data, media_type=chat_file.mime_type))
+                                elif chat_file.parsed_content:
+                                    file_context_parts.append(f"\n---\nAttached file: {chat_file.filename}\n```\n{chat_file.parsed_content}\n```")
+                            except Exception as e:
+                                logger.warning(f"Failed to load file {fid}: {e}")
+{%- endif %}
+
+                    if image_parts:
+                        full_text = user_message + "".join(file_context_parts)
+                        user_input = [full_text, *image_parts]
+                    elif file_context_parts:
+                        user_input = user_message + "".join(file_context_parts)
+{%- else %}
+                user_input = user_message
+{%- endif %}
 
                 # Use iter() on the underlying PydanticAI agent to stream all events
                 async with assistant.agent.iter(
-                    user_message,
+                    user_input,
                     deps=deps,
                     message_history=model_history,
                 ) as agent_run:
                     async for node in agent_run:
                         if Agent.is_user_prompt_node(node):
+                            prompt_text = node.user_prompt if isinstance(node.user_prompt, str) else user_message
                             await manager.send_event(
                                 websocket,
                                 "user_prompt_processed",
-                                {"prompt": node.user_prompt},
+                                {"prompt": prompt_text},
                             )
 
                         elif Agent.is_model_request_node(node):
@@ -357,25 +446,34 @@ async def agent_websocket(
                             await manager.send_event(websocket, "call_tools_start", {})
 
                             async with node.stream(agent_run.ctx) as handle_stream:
-                                async for event in handle_stream:
-                                    if isinstance(event, FunctionToolCallEvent):
+                                async for tool_event in handle_stream:
+                                    if isinstance(tool_event, FunctionToolCallEvent):
+                                        collected_tool_calls.append({
+                                            "tool_call_id": tool_event.part.tool_call_id,
+                                            "tool_name": tool_event.part.tool_name,
+                                            "args": tool_event.part.args,
+                                        })
                                         await manager.send_event(
                                             websocket,
                                             "tool_call",
                                             {
-                                                "tool_name": event.part.tool_name,
-                                                "args": event.part.args,
-                                                "tool_call_id": event.part.tool_call_id,
+                                                "tool_name": tool_event.part.tool_name,
+                                                "args": tool_event.part.args,
+                                                "tool_call_id": tool_event.part.tool_call_id,
                                             },
                                         )
 
-                                    elif isinstance(event, FunctionToolResultEvent):
+                                    elif isinstance(tool_event, FunctionToolResultEvent):
+                                        for tc in collected_tool_calls:
+                                            if tc["tool_call_id"] == tool_event.tool_call_id:
+                                                tc["result"] = str(tool_event.result.content)
+                                                break
                                         await manager.send_event(
                                             websocket,
                                             "tool_result",
                                             {
-                                                "tool_call_id": event.tool_call_id,
-                                                "content": str(event.result.content),
+                                                "tool_call_id": tool_event.tool_call_id,
+                                                "content": str(tool_event.result.content),
                                             },
                                         )
 
@@ -393,7 +491,7 @@ async def agent_websocket(
                         {"role": "assistant", "content": agent_run.result.output}
                     )
 
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
 
                 # Save assistant response to database
                 if current_conversation_id and agent_run.result:
@@ -401,7 +499,7 @@ async def agent_websocket(
 {%- if cookiecutter.use_postgresql %}
                         async with get_db_context() as db:
                             conv_service = get_conversation_service(db)
-                            await conv_service.add_message(
+                            assistant_msg = await conv_service.add_message(
                                 UUID(current_conversation_id),
                                 MessageCreate(
                                     role="assistant",
@@ -409,10 +507,28 @@ async def agent_websocket(
                                     model_name=assistant.model_name if hasattr(assistant, "model_name") else None,
                                 ),
                             )
+                            # Save tool calls
+                            from datetime import datetime, UTC
+                            import json
+                            for tc in collected_tool_calls:
+                                try:
+                                    args_dict = tc.get("args", {})
+                                    if isinstance(args_dict, str):
+                                        args_dict = json.loads(args_dict) if args_dict.strip() else {}
+                                    if args_dict is None:
+                                        args_dict = {}
+                                    tc_obj = await conv_service.start_tool_call(
+                                        assistant_msg.id,
+                                        ToolCallCreate(tool_call_id=tc["tool_call_id"], tool_name=tc["tool_name"], args=args_dict, started_at=datetime.now(UTC)),
+                                    )
+                                    if tc.get("result"):
+                                        await conv_service.complete_tool_call(tc_obj.id, ToolCallComplete(result=tc["result"], completed_at=datetime.now(UTC), success=True))
+                                except Exception as e:
+                                    logger.warning(f"Failed to persist tool call: {e}")
 {%- else %}
-                        with get_db_session() as db:
+                        with contextmanager(get_db_session)() as db:
                             conv_service = get_conversation_service(db)
-                            conv_service.add_message(
+                            assistant_msg = conv_service.add_message(
                                 current_conversation_id,
                                 MessageCreate(
                                     role="assistant",
@@ -420,10 +536,28 @@ async def agent_websocket(
                                     model_name=assistant.model_name if hasattr(assistant, "model_name") else None,
                                 ),
                             )
+                            # Save tool calls
+                            from datetime import datetime, UTC
+                            import json
+                            for tc in collected_tool_calls:
+                                try:
+                                    args_dict = tc.get("args", {})
+                                    if isinstance(args_dict, str):
+                                        args_dict = json.loads(args_dict) if args_dict.strip() else {}
+                                    if args_dict is None:
+                                        args_dict = {}
+                                    tc_obj = conv_service.start_tool_call(
+                                        assistant_msg.id,
+                                        ToolCallCreate(tool_call_id=tc["tool_call_id"], tool_name=tc["tool_name"], args=args_dict, started_at=datetime.now(UTC)),
+                                    )
+                                    if tc.get("result"):
+                                        conv_service.complete_tool_call(tc_obj.id, ToolCallComplete(result=tc["result"], completed_at=datetime.now(UTC), success=True))
+                                except Exception as e:
+                                    logger.warning(f"Failed to persist tool call: {e}")
 {%- endif %}
                     except Exception as e:
                         logger.warning(f"Failed to persist assistant response: {e}")
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+{%- elif cookiecutter.use_mongodb %}
 
                 # Save assistant response to database
                 if current_conversation_id and agent_run.result:
@@ -441,7 +575,7 @@ async def agent_websocket(
 {%- endif %}
 
                 await manager.send_event(websocket, "complete", {
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
                     "conversation_id": current_conversation_id,
 {%- endif %}
                 })
@@ -459,12 +593,12 @@ async def agent_websocket(
         pass  # Normal disconnect
     finally:
         manager.disconnect(websocket)
-{%- elif cookiecutter.enable_ai_agent and cookiecutter.use_langchain %}
+{%- elif cookiecutter.use_langchain %}
 """AI Agent WebSocket routes with streaming support (LangChain)."""
 
 import logging
 from typing import Any
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 from datetime import datetime, UTC
 {%- if cookiecutter.use_postgresql %}
 from uuid import UUID
@@ -483,18 +617,29 @@ from app.db.models.user import User
 {%- if cookiecutter.websocket_auth_api_key %}
 from app.core.config import settings
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
-from app.db.session import get_db_context
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+from app.db.session import get_db_context{% if cookiecutter.use_sqlite %}, get_db_session
+from contextlib import contextmanager{% endif %}
 from app.api.deps import ConversationSvc, get_conversation_service
-from app.schemas.conversation import ConversationCreate, MessageCreate, ToolCallCreate, ToolCallComplete
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+from app.schemas.conversation import ConversationCreate, ConversationUpdate, MessageCreate, ToolCallCreate, ToolCallComplete
+{%- elif cookiecutter.use_mongodb %}
 from app.api.deps import ConversationSvc, get_conversation_service
-from app.schemas.conversation import ConversationCreate, MessageCreate, ToolCallCreate, ToolCallComplete
+from app.schemas.conversation import ConversationCreate, ConversationUpdate, MessageCreate, ToolCallCreate, ToolCallComplete
 {%- endif %}
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/agent/models")
+async def list_models() -> dict[str, Any]:
+    """Return available LLM models and the current default."""
+    from app.core.config import settings
+    return {
+        "default": settings.AI_MODEL,
+        "models": settings.AI_AVAILABLE_MODELS,
+    }
 
 
 class AgentConnectionManager:
@@ -579,7 +724,7 @@ async def agent_websocket(
     Expected input message format:
     {
         "message": "user message here",
-        "history": [{"role": "user|assistant|system", "content": "..."}]{% if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %},
+        "history": [{"role": "user|assistant|system", "content": "..."}]{% if cookiecutter.use_database %},
         "conversation_id": "optional-uuid-to-continue-existing-conversation"{% endif %}
     }
 {%- if cookiecutter.websocket_auth_jwt %}
@@ -590,7 +735,7 @@ async def agent_websocket(
     Authentication: Requires a valid API key passed as 'api_key' query parameter.
     Example: ws://localhost:{{ cookiecutter.backend_port }}/api/v1/ws/agent?api_key=your-api-key
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 
     Persistence: Set 'conversation_id' to continue an existing conversation.
     If not provided, a new conversation is created. The conversation_id is
@@ -613,7 +758,7 @@ async def agent_websocket(
     context["user_id"] = str(user.id) if user else None
     context["user_name"] = user.email if user else None
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
     current_conversation_id: str | None = None
 {%- endif %}
 
@@ -622,15 +767,13 @@ async def agent_websocket(
             # Receive user message
             data = await websocket.receive_json()
             user_message = data.get("message", "")
-            # Optionally accept history from client (or use server-side tracking)
-            if "history" in data:
-                conversation_history = data["history"]
+            file_ids = data.get("file_ids", [])
 
-            if not user_message:
+            if not user_message and not file_ids:
                 await manager.send_event(websocket, "error", {"message": "Empty message"})
                 continue
 
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
 
             # Handle conversation persistence
             try:
@@ -642,8 +785,11 @@ async def agent_websocket(
                     requested_conv_id = data.get("conversation_id")
                     if requested_conv_id:
                         current_conversation_id = requested_conv_id
-                        # Verify conversation exists
-                        await conv_service.get_conversation(UUID(requested_conv_id))
+                        # Verify conversation exists and update title if empty
+                        conv = await conv_service.get_conversation(UUID(requested_conv_id))
+                        if not conv.title and user_message:
+                            title = user_message[:50] if len(user_message) > 50 else user_message
+                            await conv_service.update_conversation(UUID(requested_conv_id), ConversationUpdate(title=title))
                     elif not current_conversation_id:
                         # Create new conversation
                         conv_data = ConversationCreate(
@@ -661,19 +807,28 @@ async def agent_websocket(
                         )
 
                     # Save user message
-                    await conv_service.add_message(
+                    user_msg = await conv_service.add_message(
                         UUID(current_conversation_id),
                         MessageCreate(role="user", content=user_message),
                     )
+                    # Link uploaded files to this message
+                    if file_ids:
+                        try:
+                            await conv_service.link_files_to_message(user_msg.id, file_ids)
+                        except Exception as e:
+                            logger.warning(f"Failed to link files: {e}")
 {%- else %}
-                with get_db_session() as db:
+                with contextmanager(get_db_session)() as db:
                     conv_service = get_conversation_service(db)
 
                     # Get or create conversation
                     requested_conv_id = data.get("conversation_id")
                     if requested_conv_id:
                         current_conversation_id = requested_conv_id
-                        conv_service.get_conversation(requested_conv_id)
+                        conv = conv_service.get_conversation(requested_conv_id)
+                        if not conv.title and user_message:
+                            title = user_message[:50] if len(user_message) > 50 else user_message
+                            conv_service.update_conversation(requested_conv_id, ConversationUpdate(title=title))
                     elif not current_conversation_id:
                         # Create new conversation
                         conv_data = ConversationCreate(
@@ -691,15 +846,21 @@ async def agent_websocket(
                         )
 
                     # Save user message
-                    conv_service.add_message(
+                    user_msg = conv_service.add_message(
                         current_conversation_id,
                         MessageCreate(role="user", content=user_message),
                     )
+                    # Link uploaded files to this message
+                    if file_ids:
+                        try:
+                            conv_service.link_files_to_message(user_msg.id, file_ids)
+                        except Exception as e:
+                            logger.warning(f"Failed to link files: {e}")
 {%- endif %}
             except Exception as e:
                 logger.warning(f"Failed to persist conversation: {e}")
                 # Continue without persistence
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+{%- elif cookiecutter.use_mongodb %}
 
             # Handle conversation persistence (MongoDB)
             conv_service = get_conversation_service()
@@ -707,7 +868,10 @@ async def agent_websocket(
             requested_conv_id = data.get("conversation_id")
             if requested_conv_id:
                 current_conversation_id = requested_conv_id
-                await conv_service.get_conversation(requested_conv_id)
+                conv = await conv_service.get_conversation(requested_conv_id)
+                if not conv.title and user_message:
+                    title = user_message[:50] if len(user_message) > 50 else user_message
+                    await conv_service.update_conversation(requested_conv_id, ConversationUpdate(title=title))
             elif not current_conversation_id:
                 conv_data = ConversationCreate(
 {%- if cookiecutter.websocket_auth_jwt %}
@@ -733,7 +897,8 @@ async def agent_websocket(
             await manager.send_event(websocket, "user_prompt", {"content": user_message})
 
             try:
-                assistant = get_agent()
+                selected_model = data.get("model")
+                assistant = get_agent(model_name=selected_model)
                 model_history = build_message_history(conversation_history)
                 model_history.append(HumanMessage(content=user_message))
 
@@ -831,7 +996,7 @@ async def agent_websocket(
                         {"role": "assistant", "content": final_output}
                     )
 
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
 
                 # Save assistant response to database
                 if current_conversation_id and final_output:
@@ -848,7 +1013,7 @@ async def agent_websocket(
                                 ),
                             )
 {%- else %}
-                        with get_db_session() as db:
+                        with contextmanager(get_db_session)() as db:
                             conv_service = get_conversation_service(db)
                             conv_service.add_message(
                                 current_conversation_id,
@@ -861,7 +1026,7 @@ async def agent_websocket(
 {%- endif %}
                     except Exception as e:
                         logger.warning(f"Failed to persist assistant response: {e}")
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+{%- elif cookiecutter.use_mongodb %}
 
                 # Save assistant response to database
                 if current_conversation_id and final_output:
@@ -879,7 +1044,7 @@ async def agent_websocket(
 {%- endif %}
 
                 await manager.send_event(websocket, "complete", {
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
                     "conversation_id": current_conversation_id,
 {%- endif %}
                 })
@@ -897,12 +1062,12 @@ async def agent_websocket(
         pass  # Normal disconnect
     finally:
         manager.disconnect(websocket)
-{%- elif cookiecutter.enable_ai_agent and cookiecutter.use_langgraph %}
+{%- elif cookiecutter.use_langgraph %}
 """AI Agent WebSocket routes with streaming support (LangGraph ReAct Agent)."""
 
 import logging
 from typing import Any
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 from datetime import datetime, UTC
 {%- if cookiecutter.use_postgresql %}
 from uuid import UUID
@@ -921,18 +1086,29 @@ from app.db.models.user import User
 {%- if cookiecutter.websocket_auth_api_key %}
 from app.core.config import settings
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
-from app.db.session import get_db_context
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+from app.db.session import get_db_context{% if cookiecutter.use_sqlite %}, get_db_session
+from contextlib import contextmanager{% endif %}
 from app.api.deps import ConversationSvc, get_conversation_service
-from app.schemas.conversation import ConversationCreate, MessageCreate, ToolCallCreate, ToolCallComplete
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+from app.schemas.conversation import ConversationCreate, ConversationUpdate, MessageCreate, ToolCallCreate, ToolCallComplete
+{%- elif cookiecutter.use_mongodb %}
 from app.api.deps import ConversationSvc, get_conversation_service
-from app.schemas.conversation import ConversationCreate, MessageCreate, ToolCallCreate, ToolCallComplete
+from app.schemas.conversation import ConversationCreate, ConversationUpdate, MessageCreate, ToolCallCreate, ToolCallComplete
 {%- endif %}
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/agent/models")
+async def list_models() -> dict[str, Any]:
+    """Return available LLM models and the current default."""
+    from app.core.config import settings
+    return {
+        "default": settings.AI_MODEL,
+        "models": settings.AI_AVAILABLE_MODELS,
+    }
 
 
 class AgentConnectionManager:
@@ -1018,7 +1194,7 @@ async def agent_websocket(
     Expected input message format:
     {
         "message": "user message here",
-        "history": [{"role": "user|assistant|system", "content": "..."}]{% if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %},
+        "history": [{"role": "user|assistant|system", "content": "..."}]{% if cookiecutter.use_database %},
         "conversation_id": "optional-uuid-to-continue-existing-conversation"{% endif %}
     }
 {%- if cookiecutter.websocket_auth_jwt %}
@@ -1029,7 +1205,7 @@ async def agent_websocket(
     Authentication: Requires a valid API key passed as 'api_key' query parameter.
     Example: ws://localhost:{{ cookiecutter.backend_port }}/api/v1/ws/agent?api_key=your-api-key
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 
     Persistence: Set 'conversation_id' to continue an existing conversation.
     If not provided, a new conversation is created. The conversation_id is
@@ -1052,7 +1228,7 @@ async def agent_websocket(
     context["user_id"] = str(user.id) if user else None
     context["user_name"] = user.email if user else None
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
     current_conversation_id: str | None = None
 {%- endif %}
 
@@ -1061,15 +1237,13 @@ async def agent_websocket(
             # Receive user message
             data = await websocket.receive_json()
             user_message = data.get("message", "")
-            # Optionally accept history from client (or use server-side tracking)
-            if "history" in data:
-                conversation_history = data["history"]
+            file_ids = data.get("file_ids", [])
 
-            if not user_message:
+            if not user_message and not file_ids:
                 await manager.send_event(websocket, "error", {"message": "Empty message"})
                 continue
 
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
 
             # Handle conversation persistence
             try:
@@ -1081,8 +1255,11 @@ async def agent_websocket(
                     requested_conv_id = data.get("conversation_id")
                     if requested_conv_id:
                         current_conversation_id = requested_conv_id
-                        # Verify conversation exists
-                        await conv_service.get_conversation(UUID(requested_conv_id))
+                        # Verify conversation exists and update title if empty
+                        conv = await conv_service.get_conversation(UUID(requested_conv_id))
+                        if not conv.title and user_message:
+                            title = user_message[:50] if len(user_message) > 50 else user_message
+                            await conv_service.update_conversation(UUID(requested_conv_id), ConversationUpdate(title=title))
                     elif not current_conversation_id:
                         # Create new conversation
                         conv_data = ConversationCreate(
@@ -1100,19 +1277,28 @@ async def agent_websocket(
                         )
 
                     # Save user message
-                    await conv_service.add_message(
+                    user_msg = await conv_service.add_message(
                         UUID(current_conversation_id),
                         MessageCreate(role="user", content=user_message),
                     )
+                    # Link uploaded files to this message
+                    if file_ids:
+                        try:
+                            await conv_service.link_files_to_message(user_msg.id, file_ids)
+                        except Exception as e:
+                            logger.warning(f"Failed to link files: {e}")
 {%- else %}
-                with get_db_session() as db:
+                with contextmanager(get_db_session)() as db:
                     conv_service = get_conversation_service(db)
 
                     # Get or create conversation
                     requested_conv_id = data.get("conversation_id")
                     if requested_conv_id:
                         current_conversation_id = requested_conv_id
-                        conv_service.get_conversation(requested_conv_id)
+                        conv = conv_service.get_conversation(requested_conv_id)
+                        if not conv.title and user_message:
+                            title = user_message[:50] if len(user_message) > 50 else user_message
+                            conv_service.update_conversation(requested_conv_id, ConversationUpdate(title=title))
                     elif not current_conversation_id:
                         # Create new conversation
                         conv_data = ConversationCreate(
@@ -1130,15 +1316,21 @@ async def agent_websocket(
                         )
 
                     # Save user message
-                    conv_service.add_message(
+                    user_msg = conv_service.add_message(
                         current_conversation_id,
                         MessageCreate(role="user", content=user_message),
                     )
+                    # Link uploaded files to this message
+                    if file_ids:
+                        try:
+                            conv_service.link_files_to_message(user_msg.id, file_ids)
+                        except Exception as e:
+                            logger.warning(f"Failed to link files: {e}")
 {%- endif %}
             except Exception as e:
                 logger.warning(f"Failed to persist conversation: {e}")
                 # Continue without persistence
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+{%- elif cookiecutter.use_mongodb %}
 
             # Handle conversation persistence (MongoDB)
             conv_service = get_conversation_service()
@@ -1146,7 +1338,10 @@ async def agent_websocket(
             requested_conv_id = data.get("conversation_id")
             if requested_conv_id:
                 current_conversation_id = requested_conv_id
-                await conv_service.get_conversation(requested_conv_id)
+                conv = await conv_service.get_conversation(requested_conv_id)
+                if not conv.title and user_message:
+                    title = user_message[:50] if len(user_message) > 50 else user_message
+                    await conv_service.update_conversation(requested_conv_id, ConversationUpdate(title=title))
             elif not current_conversation_id:
                 conv_data = ConversationCreate(
 {%- if cookiecutter.websocket_auth_jwt %}
@@ -1172,7 +1367,8 @@ async def agent_websocket(
             await manager.send_event(websocket, "user_prompt", {"content": user_message})
 
             try:
-                assistant = get_agent()
+                selected_model = data.get("model")
+                assistant = get_agent(model_name=selected_model)
 
                 final_output = ""
                 tool_events: list[Any] = []
@@ -1273,7 +1469,7 @@ async def agent_websocket(
                         {"role": "assistant", "content": final_output}
                     )
 
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
 
                 # Save assistant response to database
                 if current_conversation_id and final_output:
@@ -1290,7 +1486,7 @@ async def agent_websocket(
                                 ),
                             )
 {%- else %}
-                        with get_db_session() as db:
+                        with contextmanager(get_db_session)() as db:
                             conv_service = get_conversation_service(db)
                             conv_service.add_message(
                                 current_conversation_id,
@@ -1303,7 +1499,7 @@ async def agent_websocket(
 {%- endif %}
                     except Exception as e:
                         logger.warning(f"Failed to persist assistant response: {e}")
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+{%- elif cookiecutter.use_mongodb %}
 
                 # Save assistant response to database
                 if current_conversation_id and final_output:
@@ -1321,7 +1517,7 @@ async def agent_websocket(
 {%- endif %}
 
                 await manager.send_event(websocket, "complete", {
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
                     "conversation_id": current_conversation_id,
 {%- endif %}
                 })
@@ -1339,12 +1535,12 @@ async def agent_websocket(
         pass  # Normal disconnect
     finally:
         manager.disconnect(websocket)
-{%- elif cookiecutter.enable_ai_agent and cookiecutter.use_crewai %}
+{%- elif cookiecutter.use_crewai %}
 """AI Agent WebSocket routes with streaming support (CrewAI Multi-Agent)."""
 
 import logging
 from typing import Any
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 from datetime import datetime, UTC
 {%- if cookiecutter.use_postgresql %}
 from uuid import UUID
@@ -1361,11 +1557,12 @@ from app.db.models.user import User
 {%- if cookiecutter.websocket_auth_api_key %}
 from app.core.config import settings
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
-from app.db.session import get_db_context
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+from app.db.session import get_db_context{% if cookiecutter.use_sqlite %}, get_db_session
+from contextlib import contextmanager{% endif %}
 from app.api.deps import ConversationSvc, get_conversation_service
 from app.schemas.conversation import ConversationCreate, MessageCreate
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+{%- elif cookiecutter.use_mongodb %}
 from app.api.deps import ConversationSvc, get_conversation_service
 from app.schemas.conversation import ConversationCreate, MessageCreate
 {%- endif %}
@@ -1373,6 +1570,16 @@ from app.schemas.conversation import ConversationCreate, MessageCreate
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/agent/models")
+async def list_models() -> dict[str, Any]:
+    """Return available LLM models and the current default."""
+    from app.core.config import settings
+    return {
+        "default": settings.AI_MODEL,
+        "models": settings.AI_AVAILABLE_MODELS,
+    }
 
 
 class AgentConnectionManager:
@@ -1441,7 +1648,7 @@ async def agent_websocket(
     Expected input message format:
     {
         "message": "user message here",
-        "history": [{"role": "user|assistant|system", "content": "..."}]{% if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %},
+        "history": [{"role": "user|assistant|system", "content": "..."}]{% if cookiecutter.use_database %},
         "conversation_id": "optional-uuid-to-continue-existing-conversation"{% endif %}
     }
 {%- if cookiecutter.websocket_auth_jwt %}
@@ -1452,7 +1659,7 @@ async def agent_websocket(
     Authentication: Requires a valid API key passed as 'api_key' query parameter.
     Example: ws://localhost:{{ cookiecutter.backend_port }}/api/v1/ws/agent?api_key=your-api-key
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 
     Persistence: Set 'conversation_id' to continue an existing conversation.
     If not provided, a new conversation is created. The conversation_id is
@@ -1475,7 +1682,7 @@ async def agent_websocket(
     context["user_id"] = str(user.id) if user else None
     context["user_name"] = user.email if user else None
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
     current_conversation_id: str | None = None
 {%- endif %}
 
@@ -1484,15 +1691,13 @@ async def agent_websocket(
             # Receive user message
             data = await websocket.receive_json()
             user_message = data.get("message", "")
-            # Optionally accept history from client (or use server-side tracking)
-            if "history" in data:
-                conversation_history = data["history"]
+            file_ids = data.get("file_ids", [])
 
-            if not user_message:
+            if not user_message and not file_ids:
                 await manager.send_event(websocket, "error", {"message": "Empty message"})
                 continue
 
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
 
             # Handle conversation persistence
             try:
@@ -1504,8 +1709,11 @@ async def agent_websocket(
                     requested_conv_id = data.get("conversation_id")
                     if requested_conv_id:
                         current_conversation_id = requested_conv_id
-                        # Verify conversation exists
-                        await conv_service.get_conversation(UUID(requested_conv_id))
+                        # Verify conversation exists and update title if empty
+                        conv = await conv_service.get_conversation(UUID(requested_conv_id))
+                        if not conv.title and user_message:
+                            title = user_message[:50] if len(user_message) > 50 else user_message
+                            await conv_service.update_conversation(UUID(requested_conv_id), ConversationUpdate(title=title))
                     elif not current_conversation_id:
                         # Create new conversation
                         conv_data = ConversationCreate(
@@ -1523,19 +1731,28 @@ async def agent_websocket(
                         )
 
                     # Save user message
-                    await conv_service.add_message(
+                    user_msg = await conv_service.add_message(
                         UUID(current_conversation_id),
                         MessageCreate(role="user", content=user_message),
                     )
+                    # Link uploaded files to this message
+                    if file_ids:
+                        try:
+                            await conv_service.link_files_to_message(user_msg.id, file_ids)
+                        except Exception as e:
+                            logger.warning(f"Failed to link files: {e}")
 {%- else %}
-                with get_db_session() as db:
+                with contextmanager(get_db_session)() as db:
                     conv_service = get_conversation_service(db)
 
                     # Get or create conversation
                     requested_conv_id = data.get("conversation_id")
                     if requested_conv_id:
                         current_conversation_id = requested_conv_id
-                        conv_service.get_conversation(requested_conv_id)
+                        conv = conv_service.get_conversation(requested_conv_id)
+                        if not conv.title and user_message:
+                            title = user_message[:50] if len(user_message) > 50 else user_message
+                            conv_service.update_conversation(requested_conv_id, ConversationUpdate(title=title))
                     elif not current_conversation_id:
                         # Create new conversation
                         conv_data = ConversationCreate(
@@ -1553,15 +1770,21 @@ async def agent_websocket(
                         )
 
                     # Save user message
-                    conv_service.add_message(
+                    user_msg = conv_service.add_message(
                         current_conversation_id,
                         MessageCreate(role="user", content=user_message),
                     )
+                    # Link uploaded files to this message
+                    if file_ids:
+                        try:
+                            conv_service.link_files_to_message(user_msg.id, file_ids)
+                        except Exception as e:
+                            logger.warning(f"Failed to link files: {e}")
 {%- endif %}
             except Exception as e:
                 logger.warning(f"Failed to persist conversation: {e}")
                 # Continue without persistence
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+{%- elif cookiecutter.use_mongodb %}
 
             # Handle conversation persistence (MongoDB)
             conv_service = get_conversation_service()
@@ -1569,7 +1792,10 @@ async def agent_websocket(
             requested_conv_id = data.get("conversation_id")
             if requested_conv_id:
                 current_conversation_id = requested_conv_id
-                await conv_service.get_conversation(requested_conv_id)
+                conv = await conv_service.get_conversation(requested_conv_id)
+                if not conv.title and user_message:
+                    title = user_message[:50] if len(user_message) > 50 else user_message
+                    await conv_service.update_conversation(requested_conv_id, ConversationUpdate(title=title))
             elif not current_conversation_id:
                 conv_data = ConversationCreate(
 {%- if cookiecutter.websocket_auth_jwt %}
@@ -1645,7 +1871,7 @@ async def agent_websocket(
                                 "output": agent_output,
                             },
                         )
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
                         # Save agent's output as a separate message
                         if current_conversation_id and agent_output:
                             try:
@@ -1660,7 +1886,7 @@ async def agent_websocket(
                                         ),
                                     )
 {%- else %}
-                                with get_db_session() as db:
+                                with contextmanager(get_db_session)() as db:
                                     conv_service = get_conversation_service(db)
                                     conv_service.add_message(
                                         current_conversation_id,
@@ -1672,7 +1898,7 @@ async def agent_websocket(
 {%- endif %}
                             except Exception as e:
                                 logger.warning(f"Failed to persist agent response: {e}")
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+{%- elif cookiecutter.use_mongodb %}
                         # Save agent's output as a separate message
                         if current_conversation_id and agent_output:
                             try:
@@ -1777,12 +2003,12 @@ async def agent_websocket(
                         {"role": "assistant", "content": final_output}
                     )
 
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
                 # Note: Agent outputs are saved individually in agent_completed events above
 {%- endif %}
 
                 await manager.send_event(websocket, "complete", {
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
                     "conversation_id": current_conversation_id,
 {%- endif %}
                 })
@@ -1800,13 +2026,13 @@ async def agent_websocket(
         pass  # Normal disconnect
     finally:
         manager.disconnect(websocket)
-{%- elif cookiecutter.enable_ai_agent and cookiecutter.use_deepagents %}
+{%- elif cookiecutter.use_deepagents %}
 """AI Agent WebSocket routes with streaming and human-in-the-loop support (DeepAgents)."""
 
 import logging
 import uuid
 from typing import Any
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 from datetime import datetime, UTC
 {%- if cookiecutter.use_postgresql %}
 from uuid import UUID
@@ -1825,18 +2051,29 @@ from app.db.models.user import User
 {%- if cookiecutter.websocket_auth_api_key %}
 from app.core.config import settings
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
-from app.db.session import get_db_context
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+from app.db.session import get_db_context{% if cookiecutter.use_sqlite %}, get_db_session
+from contextlib import contextmanager{% endif %}
 from app.api.deps import ConversationSvc, get_conversation_service
-from app.schemas.conversation import ConversationCreate, MessageCreate, ToolCallCreate, ToolCallComplete
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+from app.schemas.conversation import ConversationCreate, ConversationUpdate, MessageCreate, ToolCallCreate, ToolCallComplete
+{%- elif cookiecutter.use_mongodb %}
 from app.api.deps import ConversationSvc, get_conversation_service
-from app.schemas.conversation import ConversationCreate, MessageCreate, ToolCallCreate, ToolCallComplete
+from app.schemas.conversation import ConversationCreate, ConversationUpdate, MessageCreate, ToolCallCreate, ToolCallComplete
 {%- endif %}
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/agent/models")
+async def list_models() -> dict[str, Any]:
+    """Return available LLM models and the current default."""
+    from app.core.config import settings
+    return {
+        "default": settings.AI_MODEL,
+        "models": settings.AI_AVAILABLE_MODELS,
+    }
 
 
 class AgentConnectionManager:
@@ -1931,7 +2168,7 @@ async def agent_websocket(
     {
         "type": "message",  // optional, default
         "message": "user message here",
-        "history": [{"role": "user|assistant|system", "content": "..."}]{% if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %},
+        "history": [{"role": "user|assistant|system", "content": "..."}]{% if cookiecutter.use_database %},
         "conversation_id": "optional-uuid"{% endif %}
     }
 
@@ -1952,7 +2189,7 @@ async def agent_websocket(
     Authentication: Requires a valid API key passed as 'api_key' query parameter.
     Example: ws://localhost:{{ cookiecutter.backend_port }}/api/v1/ws/agent?api_key=your-api-key
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 
     Persistence: Set 'conversation_id' to continue an existing conversation.
     If not provided, a new conversation is created. The conversation_id is
@@ -1979,7 +2216,7 @@ async def agent_websocket(
     context["user_id"] = str(user.id) if user else None
     context["user_name"] = user.email if user else None
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
     current_conversation_id: str | None = None
 {%- endif %}
 
@@ -2085,7 +2322,7 @@ async def agent_websocket(
                 await manager.send_event(websocket, "error", {"message": "Empty message"})
                 continue
 
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
 
             # Handle conversation persistence
             try:
@@ -2097,8 +2334,11 @@ async def agent_websocket(
                     requested_conv_id = raw_data.get("conversation_id")
                     if requested_conv_id:
                         current_conversation_id = requested_conv_id
-                        # Verify conversation exists
-                        await conv_service.get_conversation(UUID(requested_conv_id))
+                        # Verify conversation exists and update title if empty
+                        conv = await conv_service.get_conversation(UUID(requested_conv_id))
+                        if not conv.title and user_message:
+                            title = user_message[:50] if len(user_message) > 50 else user_message
+                            await conv_service.update_conversation(UUID(requested_conv_id), ConversationUpdate(title=title))
                     elif not current_conversation_id:
                         # Create new conversation
                         conv_data = ConversationCreate(
@@ -2116,19 +2356,28 @@ async def agent_websocket(
                         )
 
                     # Save user message
-                    await conv_service.add_message(
+                    user_msg = await conv_service.add_message(
                         UUID(current_conversation_id),
                         MessageCreate(role="user", content=user_message),
                     )
+                    # Link uploaded files to this message
+                    if file_ids:
+                        try:
+                            await conv_service.link_files_to_message(user_msg.id, file_ids)
+                        except Exception as e:
+                            logger.warning(f"Failed to link files: {e}")
 {%- else %}
-                with get_db_session() as db:
+                with contextmanager(get_db_session)() as db:
                     conv_service = get_conversation_service(db)
 
                     # Get or create conversation
                     requested_conv_id = raw_data.get("conversation_id")
                     if requested_conv_id:
                         current_conversation_id = requested_conv_id
-                        conv_service.get_conversation(requested_conv_id)
+                        conv = conv_service.get_conversation(requested_conv_id)
+                        if not conv.title and user_message:
+                            title = user_message[:50] if len(user_message) > 50 else user_message
+                            conv_service.update_conversation(requested_conv_id, ConversationUpdate(title=title))
                     elif not current_conversation_id:
                         # Create new conversation
                         conv_data = ConversationCreate(
@@ -2146,15 +2395,21 @@ async def agent_websocket(
                         )
 
                     # Save user message
-                    conv_service.add_message(
+                    user_msg = conv_service.add_message(
                         current_conversation_id,
                         MessageCreate(role="user", content=user_message),
                     )
+                    # Link uploaded files to this message
+                    if file_ids:
+                        try:
+                            conv_service.link_files_to_message(user_msg.id, file_ids)
+                        except Exception as e:
+                            logger.warning(f"Failed to link files: {e}")
 {%- endif %}
             except Exception as e:
                 logger.warning(f"Failed to persist conversation: {e}")
                 # Continue without persistence
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+{%- elif cookiecutter.use_mongodb %}
 
             # Handle conversation persistence (MongoDB)
             conv_service = get_conversation_service()
@@ -2162,7 +2417,10 @@ async def agent_websocket(
             requested_conv_id = raw_data.get("conversation_id")
             if requested_conv_id:
                 current_conversation_id = requested_conv_id
-                await conv_service.get_conversation(requested_conv_id)
+                conv = await conv_service.get_conversation(requested_conv_id)
+                if not conv.title and user_message:
+                    title = user_message[:50] if len(user_message) > 50 else user_message
+                    await conv_service.update_conversation(requested_conv_id, ConversationUpdate(title=title))
             elif not current_conversation_id:
                 conv_data = ConversationCreate(
 {%- if cookiecutter.websocket_auth_jwt %}
@@ -2303,7 +2561,7 @@ async def agent_websocket(
                             {"role": "assistant", "content": final_output}
                         )
 
-{%- if cookiecutter.enable_conversation_persistence and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+{%- if (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
 
                     # Save assistant response to database
                     if current_conversation_id and final_output:
@@ -2320,7 +2578,7 @@ async def agent_websocket(
                                     ),
                                 )
 {%- else %}
-                            with get_db_session() as db:
+                            with contextmanager(get_db_session)() as db:
                                 conv_service = get_conversation_service(db)
                                 conv_service.add_message(
                                     current_conversation_id,
@@ -2333,7 +2591,7 @@ async def agent_websocket(
 {%- endif %}
                         except Exception as e:
                             logger.warning(f"Failed to persist assistant response: {e}")
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+{%- elif cookiecutter.use_mongodb %}
 
                     # Save assistant response to database
                     if current_conversation_id and final_output:
@@ -2351,7 +2609,7 @@ async def agent_websocket(
 {%- endif %}
 
                     await manager.send_event(websocket, "complete", {
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
                         "conversation_id": current_conversation_id,
 {%- endif %}
                     })

@@ -3,6 +3,7 @@
 
 from typing import Any, ClassVar
 
+from fastapi import FastAPI
 from sqlalchemy import String, inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase
@@ -17,16 +18,11 @@ from app.core.config import settings
 from app.core.security import verify_password
 {%- endif %}
 from app.db.base import Base
-from app.db.models.user import User
+from app.db.models.user import User, UserRole
 {%- if cookiecutter.enable_session_management %}
 from app.db.models.session import Session
 {%- endif %}
-{%- if cookiecutter.include_example_crud %}
-from app.db.models.item import Item
-{%- endif %}
-{%- if cookiecutter.enable_conversation_persistence %}
 from app.db.models.conversation import Conversation, Message, ToolCall
-{%- endif %}
 {%- if cookiecutter.enable_webhooks %}
 from app.db.models.webhook import Webhook, WebhookDelivery
 {%- endif %}
@@ -55,7 +51,6 @@ AUTO_GENERATED_COLUMNS: list[str] = [
 MODEL_ICONS: dict[str, str] = {
     "User": "fa-solid fa-user",
     "Session": "fa-solid fa-key",
-    "Item": "fa-solid fa-box",
     "Conversation": "fa-solid fa-comments",
     "Message": "fa-solid fa-message",
     "ToolCall": "fa-solid fa-wrench",
@@ -85,7 +80,7 @@ def get_model_columns(model: type) -> list[str]:
     Returns:
         List of column names.
     """
-    mapper = inspect(model)
+    mapper: Any = inspect(model)
     return [column.key for column in mapper.columns]
 
 
@@ -98,7 +93,7 @@ def get_searchable_columns(model: type) -> list[str]:
     Returns:
         List of searchable column names.
     """
-    mapper = inspect(model)
+    mapper: Any = inspect(model)
     searchable = []
     for column in mapper.columns:
         # Include String columns that are not sensitive
@@ -118,7 +113,7 @@ def get_sortable_columns(model: type) -> list[str]:
     Returns:
         List of sortable column names.
     """
-    mapper = inspect(model)
+    mapper: Any = inspect(model)
     return [column.key for column in mapper.columns]
 
 
@@ -258,7 +253,7 @@ def create_model_admin(
         exec_body,
     )
 
-    return admin_class  # type: ignore[return-value]
+    return admin_class
 
 
 def register_models_auto(
@@ -332,6 +327,9 @@ class AdminAuth(AuthenticationBackend):
         if not email or not password:
             return False
 
+        assert isinstance(email, str)
+        assert isinstance(password, str)
+
         # Get user from database
         from sqlalchemy.orm import Session as DBSession
 
@@ -340,8 +338,9 @@ class AdminAuth(AuthenticationBackend):
 
             if (
                 user
-                and verify_password(str(password), user.hashed_password)
-                and user.is_superuser
+                and user.hashed_password
+                and verify_password(password, user.hashed_password)
+                and user.has_role(UserRole.ADMIN)
             ):
                 # Store user info in session
                 request.session["admin_user_id"] = str(user.id)
@@ -366,7 +365,7 @@ class AdminAuth(AuthenticationBackend):
 
         with DBSession(get_sync_engine()) as session:
             user = session.query(User).filter(User.id == admin_user_id).first()
-            if user and user.is_superuser and user.is_active:
+            if user and user.has_role(UserRole.ADMIN) and user.is_active:
                 return True
 
         # User no longer valid, clear session
@@ -387,12 +386,10 @@ CUSTOM_MODEL_CONFIGS: dict[type, dict[str, Any]] = {
         "can_create": False,  # Sessions are created via login
     },
 {%- endif %}
-{%- if cookiecutter.enable_conversation_persistence %}
     ToolCall: {
         "icon": "fa-solid fa-wrench",
         "can_create": False,  # Tool calls are created by the agent
     },
-{%- endif %}
 {%- if cookiecutter.enable_webhooks %}
     Webhook: {
         "icon": "fa-solid fa-link",
@@ -407,7 +404,7 @@ CUSTOM_MODEL_CONFIGS: dict[type, dict[str, Any]] = {
 }
 
 
-def setup_admin(app) -> Admin:
+def setup_admin(app: FastAPI) -> Admin:
     """Setup SQLAdmin for the FastAPI app with automatic model discovery.
 
     Automatically discovers all SQLAlchemy models from the Base registry

@@ -10,8 +10,8 @@ from celery import shared_task
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, max_retries=3)
-def example_task(self, message: str) -> dict[str, Any]:
+@shared_task(bind=True, max_retries=3)  # type: ignore
+def example_task(self: Any, message: str) -> dict[str, Any]:
     """
     Example task that processes a message.
 
@@ -41,8 +41,8 @@ def example_task(self, message: str) -> dict[str, Any]:
         raise self.retry(exc=exc, countdown=2 ** self.request.retries) from exc
 
 
-@shared_task(bind=True)
-def long_running_task(self, duration: int = 10) -> dict[str, Any]:
+@shared_task(bind=True)  # type: ignore
+def long_running_task(self: Any, duration: int = 10) -> dict[str, Any]:
     """
     Example long-running task with progress updates.
 
@@ -70,7 +70,7 @@ def long_running_task(self, duration: int = 10) -> dict[str, Any]:
     }
 
 
-@shared_task
+@shared_task  # type: ignore
 def send_email_task(to: str, subject: str, body: str) -> dict[str, Any]:
     """
     Example email sending task.

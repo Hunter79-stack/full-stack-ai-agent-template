@@ -1,10 +1,13 @@
 """FastAPI application entry point."""
 
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-{%- if cookiecutter.enable_redis %}
+{%- if cookiecutter.enable_redis or cookiecutter.enable_rag %}
 from typing import TypedDict
 {%- endif %}
+
+logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI
 {%- if cookiecutter.enable_orjson %}
@@ -20,27 +23,55 @@ from app.core.config import settings
 {%- if cookiecutter.enable_logfire %}
 from app.core.logfire_setup import instrument_app, setup_logfire
 {%- endif %}
+from app.core.logging import setup_logging
 from app.core.middleware import RequestIDMiddleware
 
+{%- if cookiecutter.enable_redis or cookiecutter.enable_rag %}
 {%- if cookiecutter.enable_redis %}
 from app.clients.redis import RedisClient
+{%- endif %}
+{%- if cookiecutter.enable_rag %}
+from app.rag.embeddings import EmbeddingService
+{%- if cookiecutter.use_milvus %}
+from app.rag.vectorstore import MilvusVectorStore
+{%- elif cookiecutter.use_qdrant %}
+from app.rag.vectorstore import QdrantVectorStore
+{%- elif cookiecutter.use_chromadb %}
+from app.rag.vectorstore import ChromaVectorStore
+{%- elif cookiecutter.use_pgvector %}
+from app.rag.vectorstore import PgVectorStore
+{%- endif %}
+from app.rag.vectorstore import BaseVectorStore
+{%- endif %}
+{%- endif %}
+
+{%- if cookiecutter.enable_redis or cookiecutter.enable_rag %}
 
 
-class LifespanState(TypedDict):
+class LifespanState(TypedDict, total=False):
     """Lifespan state - resources available via request.state."""
 
+{%- if cookiecutter.enable_redis %}
     redis: RedisClient
+{%- endif %}
+{%- if cookiecutter.enable_rag %}
+    embedding_service: EmbeddingService
+    vector_store: BaseVectorStore
+{%- endif %}
 {%- endif %}
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[{% if cookiecutter.enable_redis %}LifespanState{% else %}None{% endif %}, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[{% if cookiecutter.enable_redis or cookiecutter.enable_rag %}LifespanState{% else %}None{% endif %}, None]:
     """Application lifespan - startup and shutdown events.
 
     Resources yielded here are available via request.state in route handlers.
     See: https://asgi.readthedocs.io/en/latest/specs/lifespan.html#lifespan-state
     """
     # === Startup ===
+{%- if cookiecutter.enable_redis or cookiecutter.enable_rag %}
+    state: LifespanState = {}
+{%- endif %}
 {%- if cookiecutter.enable_logfire %}
     setup_logfire()
 {%- endif %}
@@ -65,7 +96,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[{% if cookiecutter.enable_red
     instrument_httpx()
 {%- endif %}
 
-{%- if cookiecutter.enable_logfire and cookiecutter.enable_ai_agent and cookiecutter.use_pydantic_ai %}
+{%- if cookiecutter.enable_logfire and cookiecutter.use_pydantic_ai %}
     from app.core.logfire_setup import instrument_pydantic_ai
     instrument_pydantic_ai()
 {%- endif %}
@@ -73,6 +104,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[{% if cookiecutter.enable_red
 {%- if cookiecutter.enable_redis %}
     redis_client = RedisClient()
     await redis_client.connect()
+    state["redis"] = redis_client
 {%- endif %}
 
 {%- if cookiecutter.enable_caching and cookiecutter.enable_redis %}
@@ -80,18 +112,74 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[{% if cookiecutter.enable_red
     setup_cache(redis_client)
 {%- endif %}
 
-{%- if cookiecutter.enable_redis %}
+{%- if cookiecutter.enable_rag %}
+    from app.core.config import settings
+    try:
+        embedder = EmbeddingService(settings=settings.rag)
+        embedder.warmup()
+        state["embedding_service"] = embedder
+    except Exception as e:
+        logger.error(f"Embedding service warmup failed: {e}. RAG will not be available.")
 
-    yield {"redis": redis_client}
-
-    # === Shutdown ===
-    await redis_client.close()
-{%- else %}
-
-    yield
-
-    # === Shutdown ===
+{%- if cookiecutter.enable_reranker %}
+    # Initialize and warmup reranker (downloads model or validates API key)
+    try:
+        from app.rag.reranker import RerankService
+        rerank_service = RerankService(settings=settings.rag)
+        rerank_service.warmup()
+        state["rerank_service"] = rerank_service
+    except Exception as e:
+        logger.warning(f"Reranker warmup failed: {e}. Reranking will be disabled.")
 {%- endif %}
+
+{%- if cookiecutter.use_milvus %}
+    # Warmup Milvus and verify health
+    if "embedding_service" in state:
+        try:
+            vector_store = MilvusVectorStore(settings=settings.rag, embedding_service=embedder)
+            await vector_store.client.list_collections()
+            state["vector_store"] = vector_store
+        except Exception as e:
+            logger.error(f"Milvus connection failed: {e}. Vector store will not be available.")
+{%- endif %}
+{%- if cookiecutter.use_qdrant %}
+    if "embedding_service" in state:
+        try:
+            vector_store = QdrantVectorStore(settings=settings.rag, embedding_service=embedder)
+            state["vector_store"] = vector_store
+        except Exception as e:
+            logger.error(f"Qdrant connection failed: {e}. Vector store will not be available.")
+{%- endif %}
+{%- if cookiecutter.use_chromadb %}
+    if "embedding_service" in state:
+        try:
+            vector_store = ChromaVectorStore(settings=settings.rag, embedding_service=embedder)
+            state["vector_store"] = vector_store
+        except Exception as e:
+            logger.error(f"ChromaDB init failed: {e}. Vector store will not be available.")
+{%- endif %}
+{%- if cookiecutter.use_pgvector %}
+    if "embedding_service" in state:
+        try:
+            vector_store = PgVectorStore(settings=settings.rag, embedding_service=embedder)
+            state["vector_store"] = vector_store
+        except Exception as e:
+            logger.error(f"pgvector connection failed: {e}. Vector store will not be available.")
+{%- endif %}
+{%- endif %}
+
+{%- if cookiecutter.enable_redis or cookiecutter.enable_rag %}
+    yield state
+{%- else %}
+    yield
+{%- endif %}
+
+    # === Shutdown ===
+{%- if cookiecutter.enable_redis %}
+    if "redis" in state:
+        await state["redis"].close()
+{%- endif %}
+
 {%- if cookiecutter.use_postgresql %}
     from app.db.session import close_db
     await close_db()
@@ -105,6 +193,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[{% if cookiecutter.enable_red
 {%- if cookiecutter.use_sqlite %}
     from app.db.session import close_db
     close_db()
+{%- endif %}
+
+{%- if cookiecutter.enable_rag %}
+{%- if cookiecutter.use_milvus %}
+    try:
+        if "vector_store" in state:
+            await state["vector_store"].client.close()  # type: ignore[attr-defined]
+    except Exception:
+        pass
+{%- endif %}
+{%- if cookiecutter.use_qdrant %}
+    try:
+        if "vector_store" in state:
+            await state["vector_store"].client.close()  # type: ignore[attr-defined]
+    except Exception:
+        pass
+{%- endif %}
+{%- if cookiecutter.use_pgvector %}
+    try:
+        if "vector_store" in state:
+            await state["vector_store"].engine.dispose()  # type: ignore[attr-defined]
+    except Exception:
+        pass
+{%- endif %}
 {%- endif %}
 
 
@@ -148,37 +260,36 @@ def create_app() -> FastAPI:
             "description": "Session management - view and manage active login sessions",
         },
 {%- endif %}
-{%- if cookiecutter.include_example_crud %}
-        {
-            "name": "items",
-            "description": "Example CRUD endpoints demonstrating the API pattern",
-        },
-{%- endif %}
-{%- if cookiecutter.enable_conversation_persistence %}
         {
             "name": "conversations",
             "description": "AI conversation persistence - manage chat history",
         },
-{%- endif %}
 {%- if cookiecutter.enable_webhooks %}
         {
             "name": "webhooks",
             "description": "Webhook management - subscribe to events and manage deliveries",
         },
 {%- endif %}
-{%- if cookiecutter.enable_ai_agent %}
         {
             "name": "agent",
             "description": "AI agent WebSocket endpoint for real-time chat",
         },
-{%- endif %}
 {%- if cookiecutter.enable_websockets %}
         {
             "name": "websocket",
             "description": "WebSocket endpoints for real-time communication",
         },
 {%- endif %}
+{%- if cookiecutter.enable_rag %}
+        {
+            "name": "rag",
+            "description": "Retrieval Augmented Generation endpoints",
+        },
+{%- endif %}
     ]
+
+    # PII redaction in logs (GDPR/compliance)
+    setup_logging()
 
     app = FastAPI(
         title=settings.PROJECT_NAME,
@@ -203,14 +314,17 @@ def create_app() -> FastAPI:
 {%- if cookiecutter.enable_rate_limiting %}
 - **Rate Limiting**: Request rate limiting per client
 {%- endif %}
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_pydantic_ai %}
+{%- if cookiecutter.use_pydantic_ai %}
 - **AI Agent**: PydanticAI-powered conversational assistant
 {%- endif %}
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_langchain %}
+{%- if cookiecutter.use_langchain %}
 - **AI Agent**: LangChain-powered conversational assistant
 {%- endif %}
 {%- if cookiecutter.enable_logfire %}
 - **Observability**: Logfire integration for tracing and monitoring
+{%- endif %}
+{%- if cookiecutter.enable_rag %}
+- **RAG**: Retrieval Augmented Generation with Milvus and LangChain
 {%- endif %}
 
 ## Documentation

@@ -1,4 +1,4 @@
-{%- if cookiecutter.use_postgresql or cookiecutter.use_sqlite -%}
+{%- if cookiecutter.use_postgresql or cookiecutter.use_sqlite or cookiecutter.use_mongodb -%}
 """
 Cleanup old or stale data from the database.
 
@@ -39,7 +39,7 @@ def cleanup(days: int, dry_run: bool, force: bool) -> None:
 {%- if cookiecutter.use_postgresql %}
     from app.db.session import async_session_maker
 
-    async def _cleanup():
+    async def _cleanup() -> None:
         async with async_session_maker() as _session:
             info(f"Cleaning up records older than {cutoff_date}...")
 
@@ -71,5 +71,28 @@ def cleanup(days: int, dry_run: bool, force: bool) -> None:
 
         deleted_count = 0  # Replace with actual count
         success(f"Deleted {deleted_count} records.")
+{%- elif cookiecutter.use_mongodb %}
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from app.core.config import settings
+
+    async def _cleanup() -> None:
+        client = AsyncIOMotorClient(settings.MONGO_URL)
+        _db = client[settings.MONGO_DB]
+        info(f"Cleaning up records older than {cutoff_date}...")
+
+        # Add your cleanup logic here
+        # Example (with Beanie):
+        # from beanie import init_beanie
+        # await init_beanie(database=_db, document_models=[YourModel])
+        # deleted = await YourModel.find(
+        #     YourModel.created_at < cutoff_date
+        # ).delete()
+        # deleted_count = deleted.deleted_count
+
+        deleted_count = 0  # Replace with actual count
+        success(f"Deleted {deleted_count} records.")
+        client.close()
+
+    asyncio.run(_cleanup())
 {%- endif %}
 {%- endif %}

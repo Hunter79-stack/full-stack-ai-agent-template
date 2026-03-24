@@ -213,15 +213,31 @@ def post_generation_tasks(project_path: Path, config: ProjectConfig) -> None:
 
     console.print()
 
-    if config.enable_logfire:
-        console.print("[dim]To enable Logfire, set LOGFIRE_TOKEN in backend/.env[/]")
-        console.print("[dim]Get your token at: https://logfire.pydantic.dev[/]")
+    if config.enable_docker:
+        console.print("[bold green]Quick start (recommended):[/]")
+        console.print("  make quickstart")
+        console.print("[dim]  → install deps, start Docker, run migrations, create admin[/]")
         console.print()
 
+    if config.enable_logfire:
+        console.print("[dim]Set LOGFIRE_TOKEN in backend/.env → https://logfire.pydantic.dev[/]")
+
+    if config.rag_features.enable_rag:
+        vs = config.rag_features.vector_store.value
+        slug = config.project_name
+        console.print()
+        console.print(f"[bold cyan]RAG ({vs}):[/]")
+        console.print(f"  uv run {slug} rag-ingest /path/to/docs/ --collection documents")
+        console.print(f'  uv run {slug} rag-search "your query" --collection documents')
+        console.print(f"  uv run {slug} rag-collections")
+
+    if config.enable_web_search:
+        console.print("[dim]Set TAVILY_API_KEY in backend/.env → https://tavily.com[/]")
+
+    console.print()
     if config.frontend == FrontendType.NEXTJS:
-        console.print(f"[dim]Frontend runs on http://localhost:{config.frontend_port}[/]")
-        console.print(f"[dim]Backend API runs on http://localhost:{config.backend_port}[/]")
-    else:
-        console.print(f"[dim]API runs on http://localhost:{config.backend_port}[/]")
-        console.print(f"[dim]API docs: http://localhost:{config.backend_port}/docs[/]")
+        console.print(f"[dim]Frontend: http://localhost:{config.frontend_port}[/]")
+    console.print(f"[dim]API: http://localhost:{config.backend_port}[/]")
+    console.print(f"[dim]Docs: http://localhost:{config.backend_port}/docs[/]")
+    console.print("[dim]Run 'make help' for all available commands[/]")
     console.print()

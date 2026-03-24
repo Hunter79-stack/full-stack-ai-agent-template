@@ -1,9 +1,7 @@
 import type { NextConfig } from "next";
-{%- if cookiecutter.enable_i18n %}
 import createNextIntlPlugin from 'next-intl/plugin';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n.ts');
-{%- endif %}
 
 // Content Security Policy directives
 const ContentSecurityPolicy = `
@@ -69,8 +67,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-{%- if cookiecutter.enable_i18n %}
 export default withNextIntl(nextConfig);
-{%- else %}
-export default nextConfig;
-{%- endif %}

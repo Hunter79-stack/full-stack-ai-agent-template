@@ -5,7 +5,7 @@
 from pathlib import Path
 from typing import Literal
 
-{% if cookiecutter.use_database or cookiecutter.enable_redis -%}
+{% if cookiecutter.use_database or cookiecutter.enable_redis or cookiecutter.enable_rag -%}
 from pydantic import computed_field, field_validator{% if cookiecutter.use_jwt or cookiecutter.use_api_key or cookiecutter.enable_cors %}, ValidationInfo{% endif %}
 {% else -%}
 from pydantic import field_validator{% if cookiecutter.use_jwt or cookiecutter.use_api_key or cookiecutter.enable_cors %}, ValidationInfo{% endif %}
@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = False
     ENVIRONMENT: Literal["development", "local", "staging", "production"] = "local"
+    TIMEZONE: str = "{{ cookiecutter.timezone }}"  # IANA timezone (e.g. "UTC", "Europe/Warsaw", "America/New_York")
+    MODELS_CACHE_DIR: Path = Path("./models_cache")
+    MEDIA_DIR: Path = Path("./media")
+    MAX_UPLOAD_SIZE_MB: int = 50  # Max file upload size in MB
 
 {%- if cookiecutter.enable_logfire %}
 
@@ -144,6 +148,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:{{ cookiecutter.backend_port }}/api/v1/oauth/google/callback"
+    FRONTEND_URL: str = "http://localhost:{{ cookiecutter.frontend_port }}"
 {%- endif %}
 
 {%- if cookiecutter.use_api_key %}
@@ -235,22 +240,67 @@ class Settings(BaseSettings):
     S3_REGION: str = "us-east-1"
 {%- endif %}
 
-{%- if cookiecutter.enable_ai_agent %}
 
     # === AI Agent ({{ cookiecutter.ai_framework }}, {{ cookiecutter.llm_provider }}) ===
 {%- if cookiecutter.use_openai %}
     OPENAI_API_KEY: str = ""
-    AI_MODEL: str = "gpt-4o-mini"
+    AI_MODEL: str = "gpt-5-mini"
 {%- endif %}
 {%- if cookiecutter.use_anthropic %}
     ANTHROPIC_API_KEY: str = ""
-    AI_MODEL: str = "claude-sonnet-4-5-20241022"
+    AI_MODEL: str = "claude-sonnet-4-6"
+{%- endif %}
+{%- if cookiecutter.use_google %}
+    GOOGLE_API_KEY: str = ""
+    AI_MODEL: str = "gemini-2.5-flash"
 {%- endif %}
 {%- if cookiecutter.use_openrouter %}
     OPENROUTER_API_KEY: str = ""
-    AI_MODEL: str = "anthropic/claude-3.5-sonnet"
+    AI_MODEL: str = "anthropic/claude-sonnet-4-6"
 {%- endif %}
     AI_TEMPERATURE: float = 0.7
+{%- if cookiecutter.use_openai %}
+    AI_AVAILABLE_MODELS: list[str] = [
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.4-nano",
+        "gpt-5-mini",
+        "gpt-5-nano",
+        "gpt-5",
+        "gpt-5.1",
+        "gpt-5.2",
+        "o4-mini",
+        "o3",
+        "o3-mini",
+        "gpt-4.1-mini",
+        "gpt-4.1",
+        "gpt-4.1-nano",
+        "gpt-4o",
+        "gpt-4o-mini",
+    ]
+{%- endif %}
+{%- if cookiecutter.use_anthropic %}
+    AI_AVAILABLE_MODELS: list[str] = [
+        "claude-sonnet-4-6",
+        "claude-sonnet-4-5-20241022",
+        "claude-haiku-3-5-20241022",
+    ]
+{%- endif %}
+{%- if cookiecutter.use_google %}
+    AI_AVAILABLE_MODELS: list[str] = [
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.0-flash",
+    ]
+{%- endif %}
+{%- if cookiecutter.use_openrouter %}
+    AI_AVAILABLE_MODELS: list[str] = [
+        "anthropic/claude-sonnet-4-6",
+        "openai/gpt-5-mini",
+        "google/gemini-2.5-flash",
+        "deepseek/deepseek-r1",
+    ]
+{%- endif %}
     AI_FRAMEWORK: str = "{{ cookiecutter.ai_framework }}"
     LLM_PROVIDER: str = "{{ cookiecutter.llm_provider }}"
 {%- if cookiecutter.enable_langsmith %}
@@ -260,6 +310,11 @@ class Settings(BaseSettings):
     LANGCHAIN_API_KEY: str | None = None
     LANGCHAIN_PROJECT: str = "{{ cookiecutter.project_slug }}"
     LANGCHAIN_ENDPOINT: str = "https://api.smith.langchain.com"
+{%- endif %}
+{%- if cookiecutter.enable_web_search %}
+
+    # === Web Search (Tavily) ===
+    TAVILY_API_KEY: str = ""
 {%- endif %}
 {%- if cookiecutter.use_deepagents %}
 
@@ -277,6 +332,106 @@ class Settings(BaseSettings):
     # Allowed decisions for interrupted tools: approve,edit,reject
     DEEPAGENTS_ALLOWED_DECISIONS: str = "approve,edit,reject"
 {%- endif %}
+
+{%- if cookiecutter.enable_rag %}
+
+    # === RAG (Retrieval Augmented Generation) ===
+{%- if cookiecutter.use_milvus %}
+    # Vector Database (Milvus)
+    MILVUS_HOST: str = "localhost"
+    MILVUS_PORT: int = 19530
+    MILVUS_DATABASE: str = "default"
+    MILVUS_TOKEN: str = "root:Milvus"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def MILVUS_URI(self) -> str:
+        """Build Milvus connection URI."""
+        return f"http://{self.MILVUS_HOST}:{self.MILVUS_PORT}"
+{%- endif %}
+{%- if cookiecutter.use_qdrant %}
+    # Vector Database (Qdrant)
+    QDRANT_HOST: str = "localhost"
+    QDRANT_PORT: int = 6333
+    QDRANT_API_KEY: str = ""
+{%- endif %}
+{%- if cookiecutter.use_chromadb %}
+    # Vector Database (ChromaDB)
+    CHROMA_HOST: str = ""  # empty = embedded/persistent mode
+    CHROMA_PORT: int = 8100
+    CHROMA_PERSIST_DIR: str = "./chroma_data"
+{%- endif %}
+{%- if cookiecutter.use_pgvector %}
+    # Vector Database (pgvector) — uses existing PostgreSQL
+{%- endif %}
+
+    # Embeddings
+    {%- if cookiecutter.use_openai_embeddings %}
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    {%- elif cookiecutter.use_voyage_embeddings %}
+    EMBEDDING_MODEL: str = "voyage-3"
+    VOYAGE_API_KEY: str = ""
+    {%- elif cookiecutter.use_gemini_embeddings %}
+    EMBEDDING_MODEL: str = "gemini-embedding-exp-03-07"
+    {%- elif cookiecutter.use_sentence_transformers %}
+    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
+    {%- else %}
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    {%- endif %}
+
+    # Chunking
+    RAG_CHUNK_SIZE: int = 512
+    RAG_CHUNK_OVERLAP: int = 50
+
+    # Retrieval
+    RAG_DEFAULT_COLLECTION: str = "documents"
+    RAG_TOP_K: int = 10
+    RAG_CHUNKING_STRATEGY: str = "recursive"  # recursive, markdown, or fixed
+    RAG_HYBRID_SEARCH: bool = False  # Enable BM25 + vector hybrid search
+    RAG_ENABLE_OCR: bool = False  # OCR fallback for scanned PDFs (requires tesseract)
+
+    # Reranker
+    {%- if cookiecutter.enable_reranker and cookiecutter.use_cohere_reranker %}
+    COHERE_API_KEY: str = ""
+    {%- endif %}
+
+    {%- if cookiecutter.enable_reranker and cookiecutter.use_cross_encoder_reranker %}
+    HF_TOKEN: str = ""
+    CROSS_ENCODER_MODEL: str = "cross-encoder/ms-marco-MiniLM-L6-v2"
+    {%- endif %}
+
+    # Document Parser
+    {%- if cookiecutter.use_all_pdf_parsers %}
+    # PDF Parser runtime selection
+    PDF_PARSER: str = "pymupdf"  # For RAG ingestion: pymupdf, llamaparse, liteparse
+    CHAT_PDF_PARSER: str = "pymupdf"  # For chat file attachments: pymupdf, llamaparse, liteparse
+    LLAMAPARSE_API_KEY: str = ""
+    LLAMAPARSE_TIER: str = "agentic"  # fast, cost_effective, agentic, agentic_plus
+    {%- elif cookiecutter.pdf_parser == "llamaparse" or cookiecutter.use_llamaparse %}
+    LLAMAPARSE_API_KEY: str = ""
+    LLAMAPARSE_TIER: str = "agentic"  # fast, cost_effective, agentic, agentic_plus
+    {%- endif %}
+
+{%- if cookiecutter.enable_rag_image_description %}
+    # Image Description (LLM vision)
+    RAG_ENABLE_IMAGE_DESCRIPTION: bool = True  # set to false to disable LLM image description
+    RAG_IMAGE_DESCRIPTION_MODEL: str = ""  # empty = use AI_MODEL
+{%- endif %}
+
+    # Google Drive (optional, for document ingestion via service account)
+    {%- if cookiecutter.enable_google_drive_ingestion %}
+    GOOGLE_DRIVE_CREDENTIALS_FILE: str = "credentials/google-drive-sa.json"
+    {%- endif %}
+
+    # S3 (optional, for document ingestion from S3/MinIO)
+    {%- if cookiecutter.enable_s3_ingestion %}
+    S3_RAG_ENDPOINT: str | None = None
+    S3_RAG_ACCESS_KEY: str = ""
+    S3_RAG_SECRET_KEY: str = ""
+    S3_RAG_BUCKET: str = "{{ cookiecutter.project_slug }}-rag"
+    S3_RAG_REGION: str = "us-east-1"
+    {%- endif %}
+
 {%- endif %}
 
 {%- if cookiecutter.enable_cors %}
@@ -298,6 +453,50 @@ class Settings(BaseSettings):
                 "Specify explicit allowed origins."
             )
         return v
+{%- endif %}
+
+{%- if cookiecutter.enable_rag %}
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def rag(self) -> "RAGSettings":
+        """Build RAG-specific settings."""
+        from app.rag.config import RAGSettings, DocumentParser, PdfParser, EmbeddingsConfig
+
+        {%- if cookiecutter.use_all_pdf_parsers %}
+        pdf_parser = PdfParser(
+            method=self.PDF_PARSER,
+            api_key=self.LLAMAPARSE_API_KEY,
+            tier=self.LLAMAPARSE_TIER,
+        )
+        {%- elif cookiecutter.use_llamaparse %}
+        pdf_parser = PdfParser(api_key=self.LLAMAPARSE_API_KEY, tier=self.LLAMAPARSE_TIER)
+        {%- else %}
+        pdf_parser = PdfParser()
+        {%- endif %}
+
+        return RAGSettings(
+            collection_name=self.RAG_DEFAULT_COLLECTION,
+            chunk_size=self.RAG_CHUNK_SIZE,
+            chunk_overlap=self.RAG_CHUNK_OVERLAP,
+            chunking_strategy=self.RAG_CHUNKING_STRATEGY,
+            enable_hybrid_search=self.RAG_HYBRID_SEARCH,
+            enable_ocr=self.RAG_ENABLE_OCR,
+            embeddings_config=EmbeddingsConfig(model=self.EMBEDDING_MODEL),
+            document_parser=DocumentParser(),
+            pdf_parser=pdf_parser,
+{%- if cookiecutter.enable_rag_image_description %}
+            enable_image_description=self.RAG_ENABLE_IMAGE_DESCRIPTION,
+            image_description_model=self.RAG_IMAGE_DESCRIPTION_MODEL,
+{%- endif %}
+        )
+
+{%- endif %}
+
+{%- if cookiecutter.enable_rag %}
+# Rebuild Settings to resolve RAGSettings forward reference
+from app.rag.config import RAGSettings
+Settings.model_rebuild()
 {%- endif %}
 
 

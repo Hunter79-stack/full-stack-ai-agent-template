@@ -32,6 +32,17 @@ export async function POST(request: NextRequest) {
       path: "/",
     });
 
+    // Rotate refresh token if backend returns a new one
+    if (data.refresh_token) {
+      response.cookies.set("refresh_token", data.refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+        path: "/",
+      });
+    }
+
     return response;
   } catch (error) {
     if (error instanceof BackendApiError) {
@@ -41,8 +52,8 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
 
-      response.cookies.set("access_token", "", { maxAge: 0, path: "/" });
-      response.cookies.set("refresh_token", "", { maxAge: 0, path: "/" });
+      response.cookies.set("access_token", "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge: 0, path: "/" });
+      response.cookies.set("refresh_token", "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge: 0, path: "/" });
 
       return response;
     }

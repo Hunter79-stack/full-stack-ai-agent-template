@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useAuthStore } from "@/stores";
 import { apiClient, ApiError } from "@/lib/api-client";
 import type { User, LoginRequest, RegisterRequest } from "@/types";
@@ -12,7 +13,7 @@ export function useAuth() {
   const { user, isAuthenticated, isLoading, setUser, setLoading, logout } =
     useAuthStore();
 
-  // Check auth status on mount
+  // Check auth status on mount — always fetch fresh user data
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -23,10 +24,8 @@ export function useAuth() {
       }
     };
 
-    if (isLoading) {
-      checkAuth();
-    }
-  }, [isLoading, setUser]);
+    checkAuth();
+  }, [setUser]);
 
   const login = useCallback(
     async (credentials: LoginRequest) => {
@@ -37,11 +36,12 @@ export function useAuth() {
           credentials
         );
         setUser(response.user);
-        router.push(ROUTES.DASHBOARD);
+        router.push(response.user.role === "admin" ? ROUTES.DASHBOARD : ROUTES.CHAT);
         return response;
       } catch (error) {
-        setLoading(false);
         throw error;
+      } finally {
+        setLoading(false);
       }
     },
     [router, setUser, setLoading]
@@ -65,6 +65,7 @@ export function useAuth() {
       // Ignore logout errors
     } finally {
       logout();
+      toast.success("Logged out");
       router.push(ROUTES.LOGIN);
     }
   }, [logout, router]);

@@ -6,6 +6,9 @@ import { ToolCallCard } from "./tool-call-card";
 import { MarkdownContent } from "./markdown-content";
 import { CopyButton } from "./copy-button";
 import { User, Bot } from "lucide-react";
+import Image from "next/image";
+import { useAuthStore } from "@/stores";
+import { getFileUrl } from "@/lib/file-api";
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -14,6 +17,7 @@ interface MessageItemProps {
 
 export function MessageItem({ message, groupPosition }: MessageItemProps) {
   const isUser = message.role === "user";
+  const { user: authUser } = useAuthStore();
   const isGrouped = groupPosition && groupPosition !== "single";
 
   return (
@@ -40,20 +44,61 @@ export function MessageItem({ message, groupPosition }: MessageItemProps) {
 
       <div
         className={cn(
-          "flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center z-10",
+          "flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center z-10 overflow-hidden",
           isUser ? "bg-primary text-primary-foreground" : "bg-orange-500/10 text-orange-500",
           isGrouped && !isUser && "ring-2 ring-background"
         )}
       >
-        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4 sm:h-5 sm:w-5" />}
+        {isUser && authUser?.avatar_url ? (
+          <Image src={`/api/users/avatar/${authUser.id}`} alt="" width={36} height={36} className="h-full w-full object-cover" unoptimized />
+        ) : isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4 sm:h-5 sm:w-5" />}
       </div>
 
       <div className={cn(
         "flex-1 space-y-2 overflow-hidden max-w-[88%] sm:max-w-[85%]",
         isUser && "flex flex-col items-end"
       )}>
-        {/* Only show message bubble if there's content or if it's streaming without tool calls */}
-        {(message.content || (message.isStreaming && (!message.toolCalls || message.toolCalls.length === 0))) && (
+        {/* Attached images */}
+        {isUser && message.fileIds && message.fileIds.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {message.fileIds.map((fileId) => (
+              <a
+                key={fileId}
+                href={getFileUrl(fileId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block overflow-hidden rounded-xl border"
+              >
+                <Image
+                  src={getFileUrl(fileId)}
+                  alt="Attached file"
+                  width={320}
+                  height={256}
+                  className="h-auto w-auto max-h-64 max-w-xs object-contain"
+                  unoptimized
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              </a>
+            ))}
+          </div>
+        )}
+
+        {/* Thinking indicator */}
+        {!isUser && message.isStreaming && !message.content && (!message.toolCalls || message.toolCalls.length === 0) && (
+          <div className="bg-muted flex items-center gap-2 rounded-2xl rounded-tl-sm px-4 py-2.5" role="status" aria-live="polite">
+            <div className="flex gap-1" aria-hidden="true">
+              <span className="bg-muted-foreground/40 h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:0ms]" />
+              <span className="bg-muted-foreground/40 h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:150ms]" />
+              <span className="bg-muted-foreground/40 h-1.5 w-1.5 animate-bounce rounded-full [animation-delay:300ms]" />
+            </div>
+            <span className="text-muted-foreground text-xs">Thinking...</span>
+          </div>
+        )}
+
+        {/* Message bubble */}
+        {message.content && (
           <div className={cn(
             "relative rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5",
             isUser
@@ -72,15 +117,6 @@ export function MessageItem({ message, groupPosition }: MessageItemProps) {
                 )}
               </div>
             )}
-
-            {!isUser && message.content && !message.isStreaming && (
-              <div className="absolute -right-1 -top-1 sm:opacity-0 sm:group-hover:opacity-100">
-                <CopyButton
-                  text={message.content}
-                  className="bg-background/80 hover:bg-background shadow-sm"
-                />
-              </div>
-            )}
           </div>
         )}
 
@@ -89,6 +125,24 @@ export function MessageItem({ message, groupPosition }: MessageItemProps) {
             {message.toolCalls.map((toolCall) => (
               <ToolCallCard key={toolCall.id} toolCall={toolCall} />
             ))}
+          </div>
+        )}
+
+        {/* Timestamp + Copy button — inline row */}
+        {!message.isStreaming && message.content && (
+          <div className={cn("flex items-center gap-2", isUser && "flex-row-reverse")}>
+            {message.timestamp && (
+              <span className="text-muted-foreground text-[10px]">
+                {new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+            <CopyButton
+              text={message.content}
+              className={cn(
+                "h-6 w-6 rounded-md sm:opacity-0 sm:group-hover:opacity-100",
+                isUser ? "bg-secondary hover:bg-secondary/80" : "bg-muted hover:bg-muted/80"
+              )}
+            />
           </div>
         )}
       </div>

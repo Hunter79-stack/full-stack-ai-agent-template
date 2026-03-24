@@ -1,6 +1,8 @@
 {%- if cookiecutter.enable_session_management and cookiecutter.use_jwt %}
 """Session management routes."""
 
+from typing import Any
+
 from fastapi import APIRouter, status
 {%- if cookiecutter.use_postgresql %}
 from uuid import UUID
@@ -19,7 +21,7 @@ router = APIRouter()
 async def list_sessions(
     current_user: CurrentUser,
     session_service: SessionSvc,
-):
+) -> Any:
     """Get all active sessions for the current user."""
     sessions = await session_service.get_user_sessions(current_user.id)
     return SessionListResponse(
@@ -39,12 +41,12 @@ async def list_sessions(
     )
 
 
-@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def logout_session(
     session_id: UUID,
     current_user: CurrentUser,
     session_service: SessionSvc,
-):
+) -> None:
     """Logout a specific session."""
     await session_service.logout_session(session_id, current_user.id)
 
@@ -53,7 +55,7 @@ async def logout_session(
 async def logout_all_sessions(
     current_user: CurrentUser,
     session_service: SessionSvc,
-):
+) -> Any:
     """Logout from all sessions (logout from all devices)."""
     count = await session_service.logout_all_sessions(current_user.id)
     return LogoutAllResponse(
@@ -69,7 +71,7 @@ async def logout_all_sessions(
 async def list_sessions(
     current_user: CurrentUser,
     session_service: SessionSvc,
-):
+) -> Any:
     """Get all active sessions for the current user."""
     sessions = await session_service.get_user_sessions(str(current_user.id))
     return SessionListResponse(
@@ -89,12 +91,12 @@ async def list_sessions(
     )
 
 
-@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def logout_session(
     session_id: str,
     current_user: CurrentUser,
     session_service: SessionSvc,
-):
+) -> None:
     """Logout a specific session."""
     await session_service.logout_session(session_id, str(current_user.id))
 
@@ -103,7 +105,7 @@ async def logout_session(
 async def logout_all_sessions(
     current_user: CurrentUser,
     session_service: SessionSvc,
-):
+) -> Any:
     """Logout from all sessions (logout from all devices)."""
     count = await session_service.logout_all_sessions(str(current_user.id))
     return LogoutAllResponse(
@@ -119,7 +121,7 @@ async def logout_all_sessions(
 def list_sessions(
     current_user: CurrentUser,
     session_service: SessionSvc,
-):
+) -> Any:
     """Get all active sessions for the current user."""
     sessions = session_service.get_user_sessions(current_user.id)
     return SessionListResponse(
@@ -139,12 +141,12 @@ def list_sessions(
     )
 
 
-@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def logout_session(
     session_id: str,
     current_user: CurrentUser,
     session_service: SessionSvc,
-):
+) -> None:
     """Logout a specific session."""
     session_service.logout_session(session_id, current_user.id)
 
@@ -153,7 +155,7 @@ def logout_session(
 def logout_all_sessions(
     current_user: CurrentUser,
     session_service: SessionSvc,
-):
+) -> Any:
     """Logout from all sessions (logout from all devices)."""
     count = session_service.logout_all_sessions(current_user.id)
     return LogoutAllResponse(

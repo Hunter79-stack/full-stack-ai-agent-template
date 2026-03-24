@@ -1,7 +1,7 @@
 """Configuration models for project generation."""
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from importlib.metadata import version
 from typing import Any
 
@@ -18,7 +18,7 @@ def get_generator_version() -> str:
         return "0.0.0"
 
 
-class DatabaseType(str, Enum):
+class DatabaseType(StrEnum):
     """Supported database types."""
 
     POSTGRESQL = "postgresql"
@@ -27,16 +27,7 @@ class DatabaseType(str, Enum):
     NONE = "none"
 
 
-class AuthType(str, Enum):
-    """Supported authentication types."""
-
-    JWT = "jwt"
-    API_KEY = "api_key"
-    BOTH = "both"
-    NONE = "none"
-
-
-class BackgroundTaskType(str, Enum):
+class BackgroundTaskType(StrEnum):
     """Supported background task systems."""
 
     NONE = "none"
@@ -45,7 +36,7 @@ class BackgroundTaskType(str, Enum):
     ARQ = "arq"
 
 
-class CIType(str, Enum):
+class CIType(StrEnum):
     """Supported CI/CD systems."""
 
     GITHUB = "github"
@@ -53,38 +44,31 @@ class CIType(str, Enum):
     NONE = "none"
 
 
-class FrontendType(str, Enum):
+class FrontendType(StrEnum):
     """Supported frontend frameworks."""
 
     NONE = "none"
     NEXTJS = "nextjs"
 
 
-class WebSocketAuthType(str, Enum):
-    """WebSocket authentication types for AI Agent."""
+class BrandColorType(StrEnum):
+    """Brand color presets for the frontend theme."""
 
-    NONE = "none"
-    JWT = "jwt"
-    API_KEY = "api_key"
-
-
-class AdminEnvironmentType(str, Enum):
-    """Admin panel environment restriction types."""
-
-    ALL = "all"  # Available in all environments
-    DEV_ONLY = "dev_only"  # Only in development
-    DEV_STAGING = "dev_staging"  # Development + Staging (recommended)
-    DISABLED = "disabled"  # Disabled everywhere
+    BLUE = "blue"
+    GREEN = "green"
+    RED = "red"
+    VIOLET = "violet"
+    ORANGE = "orange"
 
 
-class OAuthProvider(str, Enum):
+class OAuthProvider(StrEnum):
     """Supported OAuth2 providers."""
 
     NONE = "none"
     GOOGLE = "google"
 
 
-class AIFrameworkType(str, Enum):
+class AIFrameworkType(StrEnum):
     """Supported AI agent frameworks."""
 
     PYDANTIC_AI = "pydantic_ai"
@@ -94,22 +78,23 @@ class AIFrameworkType(str, Enum):
     DEEPAGENTS = "deepagents"
 
 
-class LLMProviderType(str, Enum):
+class LLMProviderType(StrEnum):
     """Supported LLM providers."""
 
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    GOOGLE = "google"
     OPENROUTER = "openrouter"
 
 
-class RateLimitStorageType(str, Enum):
+class RateLimitStorageType(StrEnum):
     """Rate limiting storage backends."""
 
     MEMORY = "memory"
     REDIS = "redis"
 
 
-class ReverseProxyType(str, Enum):
+class ReverseProxyType(StrEnum):
     """Reverse proxy configuration options."""
 
     TRAEFIK_INCLUDED = "traefik_included"  # Include Traefik service + labels
@@ -119,7 +104,7 @@ class ReverseProxyType(str, Enum):
     NONE = "none"  # No reverse proxy, expose ports directly
 
 
-class OrmType(str, Enum):
+class OrmType(StrEnum):
     """Supported ORM libraries for SQL databases."""
 
     SQLALCHEMY = "sqlalchemy"
@@ -136,8 +121,78 @@ class LogfireFeatures(BaseModel):
     httpx: bool = False
 
 
+class EmbeddingProviderType(StrEnum):
+    """Define the embedding provider for LLM models."""
+
+    OPENAI = "openai"  # text-embedding-3-small
+    VOYAGE = "voyage"  # voyage-3 (Anthropic users)
+    GEMINI = "gemini"  # gemini-embedding-2-preview (multimodal)
+    SENTENCE_TRANSFORMERS = "sentence_transformers"  # all-MiniLM-L6-v2 (local, for OpenRouter)
+
+
+class RerankerType(StrEnum):
+    """Define the reranker type and provider for reranking purposes."""
+
+    NONE = "none"
+    COHERE = "cohere"  # rerank-v3.5
+    CROSS_ENCODER = "cross_encoder"  # ms-marco-MiniLM (local)
+
+
+class DocumentParserType(StrEnum):
+    """Define the document parser used to process non-PDF documents.
+    Note: PDF parsing is now controlled separately via PdfParserType.
+    This setting applies to TXT, MD, and DOCX files only.
+    """
+
+    PYTHON_NATIVE = "python_native"  # python-docx for DOCX
+
+
+class PdfParserType(StrEnum):
+    """Define the PDF parser used to process PDF documents.
+    PYMUPDF: Local PDF extraction using PyMuPDF. Supports text, tables
+             (→ markdown), images, headers/footers detection, OCR fallback.
+    LLAMAPARSE: AI-powered cloud extraction. Handles 130+ formats,
+                complex layouts, and scanned documents. Requires API key.
+    LITEPARSE: Fast local AI-native parsing from LlamaIndex. Layout-aware text
+               extraction, built-in OCR via Tesseract.js. Requires Node.js.
+    """
+
+    PYMUPDF = "pymupdf"  # Local PDF extraction (default)
+    LLAMAPARSE = "llamaparse"  # LlamaParse cloud API
+    LITEPARSE = "liteparse"  # LiteParse local AI-native
+    ALL = "all"  # All parsers installed, runtime selection via PDF_PARSER env var
+
+
+class VectorStoreType(StrEnum):
+    """Define a Vector Store type."""
+
+    MILVUS = "milvus"
+    QDRANT = "qdrant"
+    CHROMADB = "chromadb"
+    PGVECTOR = "pgvector"
+
+
+class RAGFeatures(BaseModel):
+    """RAG features."""
+
+    enable_rag: bool = False
+    enable_google_drive_ingestion: bool = False
+    enable_s3_ingestion: bool = False
+    reranker_type: RerankerType = RerankerType.NONE
+    enable_image_description: bool = False
+    # pdf_parser is stored here since it's only used when RAG is enabled
+    pdf_parser: PdfParserType = PdfParserType.PYMUPDF
+    vector_store: VectorStoreType = VectorStoreType.MILVUS
+
+
 class ProjectConfig(BaseModel):
-    """Full project configuration."""
+    """Full project configuration.
+
+    Interactive prompt order: basic info → database → orm → oauth → session →
+    background tasks → logfire → integrations → dev tools → reverse proxy →
+    frontend → python version → ports → AI framework → LLM provider → RAG →
+    langsmith → rate limit config → brand color
+    """
 
     # Basic info
     project_name: str = Field(..., min_length=1, pattern=r"^[a-z][a-z0-9_]*$")
@@ -145,6 +200,7 @@ class ProjectConfig(BaseModel):
 
     author_name: str = "Your Name"
     author_email: EmailStr = "your@email.com"
+    timezone: str = "UTC"
 
     # Database
     database: DatabaseType = DatabaseType.POSTGRESQL
@@ -153,17 +209,19 @@ class ProjectConfig(BaseModel):
     db_max_overflow: int = 10
     db_pool_timeout: int = 30
 
-    # Authentication
-    auth: AuthType = AuthType.JWT
+    # RAG
+    rag_features: RAGFeatures = Field(default_factory=RAGFeatures)
+
+    # Authentication (always JWT + API Key)
     oauth_provider: OAuthProvider = OAuthProvider.NONE
-    enable_session_management: bool = False
+    enable_session_management: bool = True
 
     # Observability
     enable_logfire: bool = True
     logfire_features: LogfireFeatures = Field(default_factory=LogfireFeatures)
 
     # Background tasks
-    background_tasks: BackgroundTaskType = BackgroundTaskType.NONE
+    background_tasks: BackgroundTaskType = BackgroundTaskType.CELERY
 
     # Optional integrations
     enable_redis: bool = False
@@ -176,25 +234,15 @@ class ProjectConfig(BaseModel):
     enable_sentry: bool = False
     enable_prometheus: bool = False
     enable_admin_panel: bool = False
-    admin_environments: AdminEnvironmentType = AdminEnvironmentType.DEV_STAGING
-    admin_require_auth: bool = True
-    enable_websockets: bool = False
+    enable_websockets: bool = True
     enable_file_storage: bool = False
-    enable_ai_agent: bool = True
     ai_framework: AIFrameworkType = AIFrameworkType.PYDANTIC_AI
     llm_provider: LLMProviderType = LLMProviderType.OPENAI
-    enable_conversation_persistence: bool = False
     enable_webhooks: bool = False
-    websocket_auth: WebSocketAuthType = WebSocketAuthType.NONE
     enable_langsmith: bool = False
+    enable_web_search: bool = False
     enable_cors: bool = True
     enable_orjson: bool = True
-
-    # Frontend features
-    enable_i18n: bool = False
-
-    # Example CRUD
-    include_example_crud: bool = True
 
     # Dev tools
     enable_pytest: bool = True
@@ -212,6 +260,7 @@ class ProjectConfig(BaseModel):
     # Frontend
     frontend: FrontendType = FrontendType.NEXTJS
     frontend_port: int = 3000
+    brand_color: BrandColorType = BrandColorType.BLUE
 
     # Backend
     backend_port: int = 8000
@@ -246,8 +295,8 @@ class ProjectConfig(BaseModel):
         - Conversation persistence requires a database
         - SQLModel requires a SQL database (PostgreSQL or SQLite)
         """
-        if self.enable_admin_panel and self.database == DatabaseType.NONE:
-            raise ValueError("Admin panel requires a database")
+        if self.database == DatabaseType.NONE:
+            raise ValueError("A database is required (JWT auth needs user storage)")
         if self.enable_admin_panel and self.database == DatabaseType.MONGODB:
             raise ValueError("Admin panel (SQLAdmin) requires PostgreSQL or SQLite")
         if self.orm_type == OrmType.SQLMODEL and self.database not in (
@@ -257,35 +306,11 @@ class ProjectConfig(BaseModel):
             raise ValueError("SQLModel requires PostgreSQL or SQLite database")
         if self.enable_caching and not self.enable_redis:
             raise ValueError("Caching requires Redis to be enabled")
-        if self.enable_session_management and self.database == DatabaseType.NONE:
-            raise ValueError("Session management requires a database")
-        if self.enable_conversation_persistence and self.database == DatabaseType.NONE:
-            raise ValueError("Conversation persistence requires a database")
-        if (
-            self.enable_ai_agent
-            and self.ai_framework == AIFrameworkType.LANGCHAIN
-            and self.llm_provider == LLMProviderType.OPENROUTER
-        ):
-            raise ValueError("OpenRouter is not supported with LangChain")
-        if (
-            self.enable_ai_agent
-            and self.ai_framework == AIFrameworkType.LANGGRAPH
-            and self.llm_provider == LLMProviderType.OPENROUTER
-        ):
-            raise ValueError("OpenRouter is not supported with LangGraph")
-        if (
-            self.enable_ai_agent
-            and self.ai_framework == AIFrameworkType.CREWAI
-            and self.llm_provider == LLMProviderType.OPENROUTER
-        ):
-            raise ValueError("OpenRouter is not supported with CrewAI")
-        if (
-            self.enable_ai_agent
-            and self.ai_framework == AIFrameworkType.DEEPAGENTS
-            and self.llm_provider == LLMProviderType.OPENROUTER
+        if self.llm_provider == LLMProviderType.OPENROUTER and self.ai_framework not in (
+            AIFrameworkType.PYDANTIC_AI,
         ):
             raise ValueError(
-                "DeepAgents does not support OpenRouter. Use OpenAI or Anthropic provider instead."
+                f"OpenRouter is only supported with PydanticAI, not {self.ai_framework.value}"
             )
         if (
             self.enable_rate_limiting
@@ -293,6 +318,14 @@ class ProjectConfig(BaseModel):
             and not self.enable_redis
         ):
             raise ValueError("Rate limiting with Redis storage requires Redis to be enabled")
+
+        # pgvector requires PostgreSQL
+        if (
+            self.rag_features.enable_rag
+            and self.rag_features.vector_store == VectorStoreType.PGVECTOR
+            and self.database != DatabaseType.POSTGRESQL
+        ):
+            raise ValueError("pgvector requires PostgreSQL database")
 
         # LangSmith requires LangChain-ecosystem framework
         if self.enable_langsmith and self.ai_framework not in (
@@ -302,60 +335,11 @@ class ProjectConfig(BaseModel):
         ):
             raise ValueError("LangSmith requires LangChain, LangGraph, or DeepAgents framework")
 
-        # WebSocket JWT auth requires main JWT auth
-        if self.websocket_auth == WebSocketAuthType.JWT and self.auth not in (
-            AuthType.JWT,
-            AuthType.BOTH,
-        ):
-            raise ValueError("WebSocket JWT authentication requires JWT auth to be enabled")
-
-        # WebSocket API key auth requires main API key auth
-        if self.websocket_auth == WebSocketAuthType.API_KEY and self.auth not in (
-            AuthType.API_KEY,
-            AuthType.BOTH,
-        ):
-            raise ValueError("WebSocket API key authentication requires API key auth to be enabled")
-
-        # Admin panel authentication requires JWT (for User model and security functions)
-        if (
-            self.enable_admin_panel
-            and self.admin_require_auth
-            and self.auth not in (AuthType.JWT, AuthType.BOTH)
-        ):
-            raise ValueError(
-                "Admin panel authentication requires JWT auth to be enabled. "
-                "Either enable JWT auth or set admin_require_auth=False"
-            )
-
-        # Conversation persistence requires AI agent
-        if self.enable_conversation_persistence and not self.enable_ai_agent:
-            raise ValueError("Conversation persistence requires AI agent to be enabled")
-
         # Admin panel requires SQLAlchemy (SQLAdmin doesn't fully support SQLModel)
         if self.enable_admin_panel and self.orm_type == OrmType.SQLMODEL:
             raise ValueError(
                 "Admin panel (SQLAdmin) requires SQLAlchemy ORM. "
                 "SQLModel is not fully supported. Use orm_type=sqlalchemy or disable admin panel."
-            )
-
-        # Session management requires JWT auth
-        if self.enable_session_management and self.auth not in (AuthType.JWT, AuthType.BOTH):
-            raise ValueError("Session management requires JWT auth to be enabled")
-
-        # Webhooks require a database
-        if self.enable_webhooks and self.database == DatabaseType.NONE:
-            raise ValueError(
-                "Webhooks require a database to store subscriptions and delivery history"
-            )
-
-        # OAuth requires JWT authentication
-        if self.oauth_provider != OAuthProvider.NONE and self.auth not in (
-            AuthType.JWT,
-            AuthType.BOTH,
-        ):
-            raise ValueError(
-                "OAuth authentication requires JWT auth to be enabled. "
-                "OAuth uses JWT tokens for session management after social login."
             )
 
         # Background task queues require Redis
@@ -375,11 +359,6 @@ class ProjectConfig(BaseModel):
 
         # Logfire feature-specific validations (only when logfire is enabled)
         if self.enable_logfire:
-            if self.logfire_features.database and self.database == DatabaseType.NONE:
-                raise ValueError(
-                    "Logfire database instrumentation requires a database to be enabled"
-                )
-
             if self.logfire_features.redis and not self.enable_redis:
                 raise ValueError("Logfire Redis instrumentation requires Redis to be enabled")
 
@@ -387,6 +366,17 @@ class ProjectConfig(BaseModel):
                 raise ValueError(
                     "Logfire Celery instrumentation requires Celery as background task system"
                 )
+
+        # RAG-oriented checks
+
+        if (
+            self.rag_features.enable_rag
+            and self.rag_features.vector_store in (VectorStoreType.MILVUS, VectorStoreType.QDRANT)
+            and not self.enable_docker
+        ):
+            raise ValueError(
+                f"RAG with {self.rag_features.vector_store.value} requires Docker to be enabled."
+            )
 
         return self
 
@@ -403,6 +393,7 @@ class ProjectConfig(BaseModel):
             "project_description": self.project_description,
             "author_name": self.author_name,
             "author_email": self.author_email,
+            "timezone": self.timezone,
             # Database
             "database": self.database.value,
             "use_postgresql": self.database == DatabaseType.POSTGRESQL,
@@ -416,11 +407,11 @@ class ProjectConfig(BaseModel):
             "orm_type": self.orm_type.value,
             "use_sqlalchemy": self.use_sqlalchemy,
             "use_sqlmodel": self.use_sqlmodel,
-            # Auth
-            "auth": self.auth.value,
-            "use_jwt": self.auth in (AuthType.JWT, AuthType.BOTH),
-            "use_api_key": self.auth in (AuthType.API_KEY, AuthType.BOTH),
-            "use_auth": self.auth != AuthType.NONE,
+            # Auth (always JWT + API Key)
+            "auth": "both",
+            "use_jwt": True,
+            "use_api_key": True,
+            "use_auth": True,
             # OAuth
             "oauth_provider": self.oauth_provider.value,
             "enable_oauth": self.oauth_provider != OAuthProvider.NONE,
@@ -452,15 +443,15 @@ class ProjectConfig(BaseModel):
             "enable_sentry": self.enable_sentry,
             "enable_prometheus": self.enable_prometheus,
             "enable_admin_panel": self.enable_admin_panel,
-            "admin_environments": self.admin_environments.value,
-            "admin_env_all": self.admin_environments == AdminEnvironmentType.ALL,
-            "admin_env_dev_only": self.admin_environments == AdminEnvironmentType.DEV_ONLY,
-            "admin_env_dev_staging": self.admin_environments == AdminEnvironmentType.DEV_STAGING,
-            "admin_env_disabled": self.admin_environments == AdminEnvironmentType.DISABLED,
-            "admin_require_auth": self.admin_require_auth,
+            # Legacy fixed values (required by templates, not user-configurable)
+            "admin_environments": "dev_staging",
+            "admin_env_all": False,
+            "admin_env_dev_only": False,
+            "admin_env_dev_staging": True,
+            "admin_env_disabled": False,
+            "admin_require_auth": True,
             "enable_websockets": self.enable_websockets,
             "enable_file_storage": self.enable_file_storage,
-            "enable_ai_agent": self.enable_ai_agent,
             "ai_framework": self.ai_framework.value,
             "use_pydantic_ai": self.ai_framework == AIFrameworkType.PYDANTIC_AI,
             "use_langchain": self.ai_framework == AIFrameworkType.LANGCHAIN,
@@ -470,20 +461,24 @@ class ProjectConfig(BaseModel):
             "llm_provider": self.llm_provider.value,
             "use_openai": self.llm_provider == LLMProviderType.OPENAI,
             "use_anthropic": self.llm_provider == LLMProviderType.ANTHROPIC,
+            "use_google": self.llm_provider == LLMProviderType.GOOGLE,
             "use_openrouter": self.llm_provider == LLMProviderType.OPENROUTER,
-            "enable_conversation_persistence": self.enable_conversation_persistence,
+            # Legacy fixed values (always enabled, not user-configurable)
+            "enable_conversation_persistence": True,
             "enable_langsmith": self.enable_langsmith,
+            "enable_web_search": self.enable_web_search,
             "enable_webhooks": self.enable_webhooks,
-            "websocket_auth": self.websocket_auth.value,
-            "websocket_auth_jwt": self.websocket_auth == WebSocketAuthType.JWT,
-            "websocket_auth_api_key": self.websocket_auth == WebSocketAuthType.API_KEY,
-            "websocket_auth_none": self.websocket_auth == WebSocketAuthType.NONE,
+            # Legacy fixed values (WebSocket always uses JWT)
+            "websocket_auth": "jwt",
+            "websocket_auth_jwt": True,
+            "websocket_auth_api_key": False,
+            "websocket_auth_none": False,
             "enable_cors": self.enable_cors,
             "enable_orjson": self.enable_orjson,
-            # Frontend features
-            "enable_i18n": self.enable_i18n,
-            # Example CRUD
-            "include_example_crud": self.include_example_crud,
+            # Frontend features (always enabled)
+            "enable_i18n": True,
+            # Example CRUD (always disabled)
+            "include_example_crud": False,
             # Dev tools
             "enable_pytest": self.enable_pytest,
             "enable_precommit": self.enable_precommit,
@@ -513,6 +508,77 @@ class ProjectConfig(BaseModel):
             "use_frontend": self.frontend != FrontendType.NONE,
             "use_nextjs": self.frontend == FrontendType.NEXTJS,
             "frontend_port": self.frontend_port,
+            "brand_color": self.brand_color.value,
+            "brand_color_hue": {
+                BrandColorType.BLUE: "250",
+                BrandColorType.GREEN: "155",
+                BrandColorType.RED: "25",
+                BrandColorType.VIOLET: "295",
+                BrandColorType.ORANGE: "55",
+            }[self.brand_color],
             # Backend
             "backend_port": self.backend_port,
+            # RAG
+            "enable_rag": self.rag_features.enable_rag,
+            "vector_store": self.rag_features.vector_store.value
+            if self.rag_features.enable_rag
+            else "milvus",
+            "use_milvus": self.rag_features.enable_rag
+            and self.rag_features.vector_store == VectorStoreType.MILVUS,
+            "use_qdrant": self.rag_features.enable_rag
+            and self.rag_features.vector_store == VectorStoreType.QDRANT,
+            "use_chromadb": self.rag_features.enable_rag
+            and self.rag_features.vector_store == VectorStoreType.CHROMADB,
+            "use_pgvector": self.rag_features.enable_rag
+            and self.rag_features.vector_store == VectorStoreType.PGVECTOR,
+            # Embedding provider is auto-derived from LLM provider
+            "embedding_provider": (
+                EmbeddingProviderType.VOYAGE.value
+                if self.llm_provider == LLMProviderType.ANTHROPIC
+                else EmbeddingProviderType.GEMINI.value
+                if self.llm_provider == LLMProviderType.GOOGLE
+                else EmbeddingProviderType.SENTENCE_TRANSFORMERS.value
+                if self.llm_provider == LLMProviderType.OPENROUTER
+                else EmbeddingProviderType.OPENAI.value
+            ),
+            "use_openai_embeddings": self.rag_features.enable_rag
+            and self.llm_provider
+            not in (
+                LLMProviderType.ANTHROPIC,
+                LLMProviderType.GOOGLE,
+                LLMProviderType.OPENROUTER,
+            ),
+            "use_voyage_embeddings": self.rag_features.enable_rag
+            and self.llm_provider == LLMProviderType.ANTHROPIC,
+            "use_gemini_embeddings": self.rag_features.enable_rag
+            and self.llm_provider == LLMProviderType.GOOGLE,
+            "use_sentence_transformers": self.rag_features.enable_rag
+            and self.llm_provider == LLMProviderType.OPENROUTER,
+            "enable_reranker": self.rag_features.enable_rag
+            and self.rag_features.reranker_type != RerankerType.NONE,
+            "use_cohere_reranker": self.rag_features.enable_rag
+            and self.rag_features.reranker_type == RerankerType.COHERE,
+            "use_cross_encoder_reranker": self.rag_features.enable_rag
+            and self.rag_features.reranker_type == RerankerType.CROSS_ENCODER,
+            "pdf_parser": self.rag_features.pdf_parser.value
+            if self.rag_features.enable_rag
+            else "pymupdf",
+            "use_llamaparse": self.rag_features.enable_rag
+            and self.rag_features.pdf_parser in (PdfParserType.LLAMAPARSE, PdfParserType.ALL),
+            "use_liteparse": self.rag_features.enable_rag
+            and self.rag_features.pdf_parser in (PdfParserType.LITEPARSE, PdfParserType.ALL),
+            "use_pymupdf": self.rag_features.enable_rag
+            and self.rag_features.pdf_parser in (PdfParserType.PYMUPDF, PdfParserType.ALL),
+            "use_all_pdf_parsers": self.rag_features.enable_rag
+            and self.rag_features.pdf_parser == PdfParserType.ALL,
+            "use_python_parser": True,  # Always use Python parser for non-PDF
+            "enable_google_drive_ingestion": self.rag_features.enable_google_drive_ingestion
+            if self.rag_features.enable_rag
+            else False,
+            "enable_s3_ingestion": self.rag_features.enable_s3_ingestion
+            if self.rag_features.enable_rag
+            else False,
+            "enable_rag_image_description": self.rag_features.enable_image_description
+            if self.rag_features.enable_rag
+            else False,
         }

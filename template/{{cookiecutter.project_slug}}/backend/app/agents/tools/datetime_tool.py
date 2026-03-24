@@ -1,4 +1,3 @@
-{%- if cookiecutter.enable_ai_agent %}
 """Date and time utilities for agents."""
 
 from datetime import datetime
@@ -12,6 +11,3 @@ def get_current_datetime() -> str:
     """
     now = datetime.now()
     return f"Current date: {now.strftime('%Y-%m-%d')}, Current time: {now.strftime('%H:%M:%S')}"
-{%- else %}
-"""Datetime tools - not configured."""
-{%- endif %}

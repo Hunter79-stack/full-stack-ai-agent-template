@@ -1,4 +1,4 @@
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 /**
  * Conversation types for AI chat persistence.
  */
@@ -44,6 +44,4 @@ export interface ConversationListResponse {
 export interface ConversationWithMessages extends Conversation {
   messages: ConversationMessage[];
 }
-{%- else %}
-// Conversation types - not configured (enable_conversation_persistence is false)
 {%- endif %}

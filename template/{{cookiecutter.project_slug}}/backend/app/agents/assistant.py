@@ -1,4 +1,4 @@
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_pydantic_ai %}
+{%- if cookiecutter.use_pydantic_ai %}
 """Assistant agent with PydanticAI.
 
 The main conversational agent that can be extended with custom tools.
@@ -23,6 +23,10 @@ from pydantic_ai.providers.openai import OpenAIProvider
 {%- if cookiecutter.use_anthropic %}
 from pydantic_ai.models.anthropic import AnthropicModel
 {%- endif %}
+{%- if cookiecutter.use_google %}
+from pydantic_ai.models.google import GoogleModel
+from pydantic_ai.providers.google import GoogleProvider
+{%- endif %}
 {%- if cookiecutter.use_openrouter %}
 from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
@@ -30,7 +34,16 @@ from pydantic_ai.providers.openrouter import OpenRouterProvider
 from pydantic_ai.settings import ModelSettings
 
 from app.agents.prompts import DEFAULT_SYSTEM_PROMPT
+{%- if cookiecutter.enable_rag %}
+from app.agents.prompts import get_system_prompt_with_rag
+{%- endif %}
 from app.agents.tools import get_current_datetime
+{%- if cookiecutter.enable_web_search %}
+from app.agents.tools.web_search import web_search
+{%- endif %}
+{%- if cookiecutter.enable_rag %}
+from app.agents.tools.rag_tool import search_knowledge_base
+{%- endif %}
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -62,7 +75,11 @@ class AssistantAgent:
     ):
         self.model_name = model_name or settings.AI_MODEL
         self.temperature = temperature or settings.AI_TEMPERATURE
+{%- if cookiecutter.enable_rag %}
+        self.system_prompt = system_prompt or get_system_prompt_with_rag()
+{%- else %}
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+{%- endif %}
         self._agent: Agent[Deps, str] | None = None
 
     def _create_agent(self) -> Agent[Deps, str]:
@@ -76,7 +93,12 @@ class AssistantAgent:
 {%- if cookiecutter.use_anthropic %}
         model = AnthropicModel(
             self.model_name,
-            api_key=settings.ANTHROPIC_API_KEY,
+        )
+{%- endif %}
+{%- if cookiecutter.use_google %}
+        model = GoogleModel(
+            self.model_name,
+            provider=GoogleProvider(api_key=settings.GOOGLE_API_KEY),
         )
 {%- endif %}
 {%- if cookiecutter.use_openrouter %}
@@ -106,6 +128,41 @@ class AssistantAgent:
             Use this tool when you need to know the current date or time.
             """
             return get_current_datetime()
+
+{%- if cookiecutter.enable_rag %}
+        @agent.tool
+        async def search_documents(
+            ctx: RunContext[Deps], query: str, top_k: int = 5
+        ) -> str:
+            """Search the knowledge base for relevant documents.
+
+            Use this tool to find information from uploaded documents before answering user queries.
+            Searches across all available collections automatically.
+            Cite sources by referring to the document filename from the search results.
+
+            Args:
+                query: The search query string.
+                top_k: Number of top results to retrieve (default: 5).
+
+            Returns:
+                Formatted string with search results including content and scores.
+            """
+            return await search_knowledge_base(query=query, top_k=top_k)
+{%- endif %}
+
+{%- if cookiecutter.enable_web_search %}
+        @agent.tool
+        async def search_web(ctx: RunContext[Deps], query: str, max_results: int = 5) -> str:
+            """Search the web for current information.
+
+            Use this tool when you need up-to-date information from the internet.
+
+            Args:
+                query: The search query.
+                max_results: Number of results (1-10, default: 5).
+            """
+            return await web_search(query=query, max_results=max_results)
+{%- endif %}
 
     @property
     def agent(self) -> Agent[Deps, str]:
@@ -161,7 +218,7 @@ class AssistantAgent:
         user_input: str,
         history: list[dict[str, str]] | None = None,
         deps: Deps | None = None,
-    ):
+    ) -> Any:
         """Stream agent execution with full event access.
 
         Args:
@@ -193,13 +250,16 @@ class AssistantAgent:
                 yield event
 
 
-def get_agent() -> AssistantAgent:
+def get_agent(model_name: str | None = None) -> AssistantAgent:
     """Factory function to create an AssistantAgent.
+
+    Args:
+        model_name: Override the default AI model.
 
     Returns:
         Configured AssistantAgent instance.
     """
-    return AssistantAgent()
+    return AssistantAgent(model_name=model_name)
 
 
 async def run_agent(

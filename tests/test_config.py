@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from fastapi_gen.config import (
     AIFrameworkType,
-    AuthType,
     BackgroundTaskType,
     CIType,
     DatabaseType,
@@ -15,9 +14,10 @@ from fastapi_gen.config import (
     LogfireFeatures,
     OrmType,
     ProjectConfig,
+    RAGFeatures,
     RateLimitStorageType,
     ReverseProxyType,
-    WebSocketAuthType,
+    VectorStoreType,
     get_generator_version,
 )
 
@@ -48,14 +48,6 @@ class TestEnums:
         assert DatabaseType.POSTGRESQL.value == "postgresql"
         assert DatabaseType.MONGODB.value == "mongodb"
         assert DatabaseType.SQLITE.value == "sqlite"
-        assert DatabaseType.NONE.value == "none"
-
-    def test_auth_type_values(self) -> None:
-        """Test AuthType enum values."""
-        assert AuthType.JWT.value == "jwt"
-        assert AuthType.API_KEY.value == "api_key"
-        assert AuthType.BOTH.value == "both"
-        assert AuthType.NONE.value == "none"
 
     def test_background_task_type_values(self) -> None:
         """Test BackgroundTaskType enum values."""
@@ -114,10 +106,9 @@ class TestProjectConfig:
 
     def test_minimal_config(self) -> None:
         """Test minimal valid configuration."""
-        config = ProjectConfig(project_name="myproject")
+        config = ProjectConfig(project_name="myproject", background_tasks=BackgroundTaskType.NONE)
         assert config.project_name == "myproject"
         assert config.database == DatabaseType.POSTGRESQL
-        assert config.auth == AuthType.JWT
 
     def test_valid_project_names(self) -> None:
         """Test valid project name patterns."""
@@ -129,7 +120,7 @@ class TestProjectConfig:
             "abc_def_123",
         ]
         for name in valid_names:
-            config = ProjectConfig(project_name=name)
+            config = ProjectConfig(project_name=name, background_tasks=BackgroundTaskType.NONE)
             assert config.project_name == name
 
     def test_invalid_project_names(self) -> None:
@@ -143,17 +134,17 @@ class TestProjectConfig:
         ]
         for name in invalid_names:
             with pytest.raises(ValidationError):
-                ProjectConfig(project_name=name)
+                ProjectConfig(project_name=name, background_tasks=BackgroundTaskType.NONE)
 
     def test_project_slug_conversion(self) -> None:
         """Test project_slug is derived from project_name."""
-        config = ProjectConfig(project_name="my_project")
+        config = ProjectConfig(project_name="my_project", background_tasks=BackgroundTaskType.NONE)
         context = config.to_cookiecutter_context()
         assert context["project_slug"] == "my_project"
 
     def test_all_fields_present_in_context(self) -> None:
         """Test all expected fields are in cookiecutter context."""
-        config = ProjectConfig(project_name="test")
+        config = ProjectConfig(project_name="test", background_tasks=BackgroundTaskType.NONE)
         context = config.to_cookiecutter_context()
 
         expected_keys = [
@@ -190,7 +181,6 @@ class TestProjectConfig:
             "enable_admin_panel",
             "enable_websockets",
             "enable_file_storage",
-            "enable_ai_agent",
             "enable_cors",
             "enable_orjson",
             "enable_pytest",
@@ -215,6 +205,7 @@ class TestCookiecutterContext:
         config = ProjectConfig(
             project_name="test",
             database=DatabaseType.POSTGRESQL,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -229,6 +220,7 @@ class TestCookiecutterContext:
         config = ProjectConfig(
             project_name="test",
             database=DatabaseType.MONGODB,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -243,6 +235,7 @@ class TestCookiecutterContext:
         config = ProjectConfig(
             project_name="test",
             database=DatabaseType.SQLITE,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -251,73 +244,6 @@ class TestCookiecutterContext:
         assert context["use_mongodb"] is False
         assert context["use_sqlite"] is True
         assert context["use_database"] is True
-
-    def test_no_database_flags(self) -> None:
-        """Test no database sets correct flags."""
-        config = ProjectConfig(
-            project_name="test",
-            database=DatabaseType.NONE,
-            logfire_features=LogfireFeatures(database=False),  # Must disable logfire DB
-        )
-        context = config.to_cookiecutter_context()
-
-        assert context["database"] == "none"
-        assert context["use_postgresql"] is False
-        assert context["use_mongodb"] is False
-        assert context["use_sqlite"] is False
-        assert context["use_database"] is False
-
-    def test_jwt_auth_flags(self) -> None:
-        """Test JWT auth sets correct flags."""
-        config = ProjectConfig(
-            project_name="test",
-            auth=AuthType.JWT,
-        )
-        context = config.to_cookiecutter_context()
-
-        assert context["auth"] == "jwt"
-        assert context["use_jwt"] is True
-        assert context["use_api_key"] is False
-        assert context["use_auth"] is True
-
-    def test_api_key_auth_flags(self) -> None:
-        """Test API key auth sets correct flags."""
-        config = ProjectConfig(
-            project_name="test",
-            auth=AuthType.API_KEY,
-        )
-        context = config.to_cookiecutter_context()
-
-        assert context["auth"] == "api_key"
-        assert context["use_jwt"] is False
-        assert context["use_api_key"] is True
-        assert context["use_auth"] is True
-
-    def test_both_auth_flags(self) -> None:
-        """Test both auth sets correct flags."""
-        config = ProjectConfig(
-            project_name="test",
-            auth=AuthType.BOTH,
-        )
-        context = config.to_cookiecutter_context()
-
-        assert context["auth"] == "both"
-        assert context["use_jwt"] is True
-        assert context["use_api_key"] is True
-        assert context["use_auth"] is True
-
-    def test_no_auth_flags(self) -> None:
-        """Test no auth sets correct flags."""
-        config = ProjectConfig(
-            project_name="test",
-            auth=AuthType.NONE,
-        )
-        context = config.to_cookiecutter_context()
-
-        assert context["auth"] == "none"
-        assert context["use_jwt"] is False
-        assert context["use_api_key"] is False
-        assert context["use_auth"] is False
 
     def test_celery_background_task_flags(self) -> None:
         """Test Celery sets correct flags."""
@@ -366,6 +292,7 @@ class TestCookiecutterContext:
         config = ProjectConfig(
             project_name="test",
             ci_type=CIType.GITHUB,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -378,6 +305,7 @@ class TestCookiecutterContext:
         config = ProjectConfig(
             project_name="test",
             ci_type=CIType.GITLAB,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -390,6 +318,7 @@ class TestCookiecutterContext:
         config = ProjectConfig(
             project_name="test",
             reverse_proxy=ReverseProxyType.TRAEFIK_INCLUDED,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -406,6 +335,7 @@ class TestCookiecutterContext:
         config = ProjectConfig(
             project_name="test",
             reverse_proxy=ReverseProxyType.TRAEFIK_EXTERNAL,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -422,6 +352,7 @@ class TestCookiecutterContext:
         config = ProjectConfig(
             project_name="test",
             reverse_proxy=ReverseProxyType.NGINX_INCLUDED,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -438,6 +369,7 @@ class TestCookiecutterContext:
         config = ProjectConfig(
             project_name="test",
             reverse_proxy=ReverseProxyType.NGINX_EXTERNAL,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -454,6 +386,7 @@ class TestCookiecutterContext:
         config = ProjectConfig(
             project_name="test",
             reverse_proxy=ReverseProxyType.NONE,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -478,6 +411,7 @@ class TestCookiecutterContext:
                 celery=False,
                 httpx=True,
             ),
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -492,15 +426,6 @@ class TestCookiecutterContext:
 class TestOptionCombinationValidation:
     """Tests for invalid option combination validation."""
 
-    def test_admin_panel_requires_database(self) -> None:
-        """Test that admin panel cannot be enabled without a database."""
-        with pytest.raises(ValidationError, match="Admin panel requires a database"):
-            ProjectConfig(
-                project_name="test",
-                database=DatabaseType.NONE,
-                enable_admin_panel=True,
-            )
-
     def test_admin_panel_not_supported_with_mongodb(self) -> None:
         """Test that admin panel (SQLAdmin) does not support MongoDB."""
         with pytest.raises(
@@ -510,6 +435,7 @@ class TestOptionCombinationValidation:
                 project_name="test",
                 database=DatabaseType.MONGODB,
                 enable_admin_panel=True,
+                background_tasks=BackgroundTaskType.NONE,
             )
 
     def test_sqlmodel_requires_sql_database(self) -> None:
@@ -521,17 +447,7 @@ class TestOptionCombinationValidation:
                 project_name="test",
                 database=DatabaseType.MONGODB,
                 orm_type=OrmType.SQLMODEL,
-            )
-
-    def test_sqlmodel_not_supported_with_no_database(self) -> None:
-        """Test that SQLModel cannot be used without a database."""
-        with pytest.raises(
-            ValidationError, match="SQLModel requires PostgreSQL or SQLite database"
-        ):
-            ProjectConfig(
-                project_name="test",
-                database=DatabaseType.NONE,
-                orm_type=OrmType.SQLMODEL,
+                background_tasks=BackgroundTaskType.NONE,
             )
 
     def test_sqlmodel_with_postgresql_is_valid(self) -> None:
@@ -540,6 +456,7 @@ class TestOptionCombinationValidation:
             project_name="test",
             database=DatabaseType.POSTGRESQL,
             orm_type=OrmType.SQLMODEL,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.use_sqlmodel is True
         assert config.use_sqlalchemy is False
@@ -550,6 +467,7 @@ class TestOptionCombinationValidation:
             project_name="test",
             database=DatabaseType.SQLITE,
             orm_type=OrmType.SQLMODEL,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.use_sqlmodel is True
         assert config.use_sqlalchemy is False
@@ -561,24 +479,7 @@ class TestOptionCombinationValidation:
                 project_name="test",
                 enable_caching=True,
                 enable_redis=False,
-            )
-
-    def test_session_management_requires_database(self) -> None:
-        """Test that session management requires a database."""
-        with pytest.raises(ValidationError, match="Session management requires a database"):
-            ProjectConfig(
-                project_name="test",
-                database=DatabaseType.NONE,
-                enable_session_management=True,
-            )
-
-    def test_conversation_persistence_requires_database(self) -> None:
-        """Test that conversation persistence requires a database."""
-        with pytest.raises(ValidationError, match="Conversation persistence requires a database"):
-            ProjectConfig(
-                project_name="test",
-                database=DatabaseType.NONE,
-                enable_conversation_persistence=True,
+                background_tasks=BackgroundTaskType.NONE,
             )
 
     def test_admin_panel_with_postgresql_is_valid(self) -> None:
@@ -587,6 +488,7 @@ class TestOptionCombinationValidation:
             project_name="test",
             database=DatabaseType.POSTGRESQL,
             enable_admin_panel=True,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.enable_admin_panel is True
         assert config.database == DatabaseType.POSTGRESQL
@@ -597,6 +499,7 @@ class TestOptionCombinationValidation:
             project_name="test",
             database=DatabaseType.SQLITE,
             enable_admin_panel=True,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.enable_admin_panel is True
         assert config.database == DatabaseType.SQLITE
@@ -607,6 +510,7 @@ class TestOptionCombinationValidation:
             project_name="test",
             enable_caching=True,
             enable_redis=True,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.enable_caching is True
         assert config.enable_redis is True
@@ -617,58 +521,50 @@ class TestOptionCombinationValidation:
             project_name="test",
             database=DatabaseType.POSTGRESQL,
             enable_session_management=True,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.enable_session_management is True
-
-    def test_conversation_persistence_with_database_is_valid(self) -> None:
-        """Test that conversation persistence with a database is valid."""
-        config = ProjectConfig(
-            project_name="test",
-            database=DatabaseType.POSTGRESQL,
-            enable_conversation_persistence=True,
-        )
-        assert config.enable_conversation_persistence is True
 
     def test_openrouter_with_langchain_raises_validation_error(self) -> None:
         """Test that OpenRouter + LangChain combination is rejected."""
         with pytest.raises(ValidationError) as exc_info:
             ProjectConfig(
                 project_name="test",
-                enable_ai_agent=True,
                 llm_provider=LLMProviderType.OPENROUTER,
                 ai_framework=AIFrameworkType.LANGCHAIN,
+                background_tasks=BackgroundTaskType.NONE,
             )
-        assert "OpenRouter is not supported with LangChain" in str(exc_info.value)
+        assert "OpenRouter is only supported with PydanticAI" in str(exc_info.value)
 
     def test_openrouter_with_langgraph_raises_validation_error(self) -> None:
         """Test that OpenRouter + LangGraph combination is rejected."""
         with pytest.raises(ValidationError) as exc_info:
             ProjectConfig(
                 project_name="test",
-                enable_ai_agent=True,
                 llm_provider=LLMProviderType.OPENROUTER,
                 ai_framework=AIFrameworkType.LANGGRAPH,
+                background_tasks=BackgroundTaskType.NONE,
             )
-        assert "OpenRouter is not supported with LangGraph" in str(exc_info.value)
+        assert "OpenRouter is only supported with PydanticAI" in str(exc_info.value)
 
     def test_openrouter_with_crewai_raises_validation_error(self) -> None:
         """Test that OpenRouter + CrewAI combination is rejected."""
         with pytest.raises(ValidationError) as exc_info:
             ProjectConfig(
                 project_name="test",
-                enable_ai_agent=True,
                 llm_provider=LLMProviderType.OPENROUTER,
                 ai_framework=AIFrameworkType.CREWAI,
+                background_tasks=BackgroundTaskType.NONE,
             )
-        assert "OpenRouter is not supported with CrewAI" in str(exc_info.value)
+        assert "OpenRouter is only supported with PydanticAI" in str(exc_info.value)
 
     def test_openrouter_with_pydanticai_is_valid(self) -> None:
         """Test that OpenRouter + PydanticAI combination is accepted."""
         config = ProjectConfig(
             project_name="test",
-            enable_ai_agent=True,
             llm_provider=LLMProviderType.OPENROUTER,
             ai_framework=AIFrameworkType.PYDANTIC_AI,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.llm_provider == LLMProviderType.OPENROUTER
         assert config.ai_framework == AIFrameworkType.PYDANTIC_AI
@@ -677,8 +573,8 @@ class TestOptionCombinationValidation:
         """Test that CrewAI framework sets correct context flags."""
         config = ProjectConfig(
             project_name="test",
-            enable_ai_agent=True,
             ai_framework=AIFrameworkType.CREWAI,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -692,19 +588,19 @@ class TestOptionCombinationValidation:
         with pytest.raises(ValidationError) as exc_info:
             ProjectConfig(
                 project_name="test",
-                enable_ai_agent=True,
                 llm_provider=LLMProviderType.OPENROUTER,
                 ai_framework=AIFrameworkType.DEEPAGENTS,
+                background_tasks=BackgroundTaskType.NONE,
             )
-        assert "DeepAgents does not support OpenRouter" in str(exc_info.value)
+        assert "OpenRouter is only supported with PydanticAI" in str(exc_info.value)
 
     def test_deepagents_with_openai_is_valid(self) -> None:
         """Test that DeepAgents + OpenAI combination is accepted."""
         config = ProjectConfig(
             project_name="test",
-            enable_ai_agent=True,
             llm_provider=LLMProviderType.OPENAI,
             ai_framework=AIFrameworkType.DEEPAGENTS,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.ai_framework == AIFrameworkType.DEEPAGENTS
         assert config.llm_provider == LLMProviderType.OPENAI
@@ -713,9 +609,9 @@ class TestOptionCombinationValidation:
         """Test that DeepAgents + Anthropic combination is accepted."""
         config = ProjectConfig(
             project_name="test",
-            enable_ai_agent=True,
             llm_provider=LLMProviderType.ANTHROPIC,
             ai_framework=AIFrameworkType.DEEPAGENTS,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.ai_framework == AIFrameworkType.DEEPAGENTS
         assert config.llm_provider == LLMProviderType.ANTHROPIC
@@ -724,8 +620,8 @@ class TestOptionCombinationValidation:
         """Test that DeepAgents framework sets correct context flags."""
         config = ProjectConfig(
             project_name="test",
-            enable_ai_agent=True,
             ai_framework=AIFrameworkType.DEEPAGENTS,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -744,9 +640,9 @@ class TestLangSmithIntegration:
         with pytest.raises(ValidationError) as exc_info:
             ProjectConfig(
                 project_name="test",
-                enable_ai_agent=True,
                 ai_framework=AIFrameworkType.PYDANTIC_AI,
                 enable_langsmith=True,
+                background_tasks=BackgroundTaskType.NONE,
             )
         assert "LangSmith requires LangChain, LangGraph, or DeepAgents" in str(exc_info.value)
 
@@ -755,9 +651,9 @@ class TestLangSmithIntegration:
         with pytest.raises(ValidationError) as exc_info:
             ProjectConfig(
                 project_name="test",
-                enable_ai_agent=True,
                 ai_framework=AIFrameworkType.CREWAI,
                 enable_langsmith=True,
+                background_tasks=BackgroundTaskType.NONE,
             )
         assert "LangSmith requires LangChain, LangGraph, or DeepAgents" in str(exc_info.value)
 
@@ -765,9 +661,9 @@ class TestLangSmithIntegration:
         """Test that LangSmith + LangChain is accepted."""
         config = ProjectConfig(
             project_name="test",
-            enable_ai_agent=True,
             ai_framework=AIFrameworkType.LANGCHAIN,
             enable_langsmith=True,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.enable_langsmith is True
 
@@ -775,9 +671,9 @@ class TestLangSmithIntegration:
         """Test that LangSmith + LangGraph is accepted."""
         config = ProjectConfig(
             project_name="test",
-            enable_ai_agent=True,
             ai_framework=AIFrameworkType.LANGGRAPH,
             enable_langsmith=True,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.enable_langsmith is True
 
@@ -785,9 +681,9 @@ class TestLangSmithIntegration:
         """Test that LangSmith + DeepAgents is accepted."""
         config = ProjectConfig(
             project_name="test",
-            enable_ai_agent=True,
             ai_framework=AIFrameworkType.DEEPAGENTS,
             enable_langsmith=True,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.enable_langsmith is True
 
@@ -795,9 +691,9 @@ class TestLangSmithIntegration:
         """Test that enable_langsmith appears in cookiecutter context."""
         config = ProjectConfig(
             project_name="test",
-            enable_ai_agent=True,
             ai_framework=AIFrameworkType.LANGCHAIN,
             enable_langsmith=True,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
         assert context["enable_langsmith"] is True
@@ -806,16 +702,16 @@ class TestLangSmithIntegration:
         """Test that enable_langsmith=False appears in context."""
         config = ProjectConfig(
             project_name="test",
-            enable_ai_agent=True,
             ai_framework=AIFrameworkType.LANGCHAIN,
             enable_langsmith=False,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
         assert context["enable_langsmith"] is False
 
     def test_langsmith_defaults_to_false(self) -> None:
         """Test that LangSmith is disabled by default."""
-        config = ProjectConfig(project_name="test")
+        config = ProjectConfig(project_name="test", background_tasks=BackgroundTaskType.NONE)
         assert config.enable_langsmith is False
 
 
@@ -832,7 +728,7 @@ class TestEmailValidation:
             "user123@example.co.uk",
         ]
         for email in valid_emails:
-            config = ProjectConfig(project_name="test", author_email=email)
+            config = ProjectConfig(project_name="test", author_email=email, background_tasks=BackgroundTaskType.NONE)
             assert config.author_email == email
 
     def test_invalid_email_raises_error(self) -> None:
@@ -846,7 +742,7 @@ class TestEmailValidation:
         ]
         for email in invalid_emails:
             with pytest.raises(ValidationError):
-                ProjectConfig(project_name="test", author_email=email)
+                ProjectConfig(project_name="test", author_email=email, background_tasks=BackgroundTaskType.NONE)
 
 
 class TestRateLimitConfig:
@@ -854,7 +750,7 @@ class TestRateLimitConfig:
 
     def test_default_rate_limit_values(self) -> None:
         """Test default rate limit configuration values."""
-        config = ProjectConfig(project_name="test")
+        config = ProjectConfig(project_name="test", background_tasks=BackgroundTaskType.NONE)
         assert config.rate_limit_requests == 100
         assert config.rate_limit_period == 60
         assert config.rate_limit_storage == RateLimitStorageType.MEMORY
@@ -867,6 +763,7 @@ class TestRateLimitConfig:
             rate_limit_requests=50,
             rate_limit_period=30,
             rate_limit_storage=RateLimitStorageType.MEMORY,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.rate_limit_requests == 50
         assert config.rate_limit_period == 30
@@ -878,6 +775,7 @@ class TestRateLimitConfig:
             project_name="test",
             enable_rate_limiting=True,
             rate_limit_storage=RateLimitStorageType.MEMORY,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -892,6 +790,7 @@ class TestRateLimitConfig:
             enable_rate_limiting=True,
             enable_redis=True,
             rate_limit_storage=RateLimitStorageType.REDIS,
+            background_tasks=BackgroundTaskType.NONE,
         )
         context = config.to_cookiecutter_context()
 
@@ -909,6 +808,7 @@ class TestRateLimitConfig:
                 enable_rate_limiting=True,
                 enable_redis=False,
                 rate_limit_storage=RateLimitStorageType.REDIS,
+                background_tasks=BackgroundTaskType.NONE,
             )
 
     def test_rate_limit_redis_storage_with_redis_is_valid(self) -> None:
@@ -918,6 +818,7 @@ class TestRateLimitConfig:
             enable_rate_limiting=True,
             enable_redis=True,
             rate_limit_storage=RateLimitStorageType.REDIS,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.rate_limit_storage == RateLimitStorageType.REDIS
         assert config.enable_redis is True
@@ -925,126 +826,6 @@ class TestRateLimitConfig:
 
 class TestNewDependencyValidations:
     """Tests for new dependency validation rules."""
-
-    def test_websocket_jwt_auth_requires_jwt_auth(self) -> None:
-        """Test that WebSocket JWT auth requires main JWT auth to be enabled."""
-        with pytest.raises(ValidationError, match="WebSocket JWT authentication requires JWT auth"):
-            ProjectConfig(
-                project_name="test",
-                auth=AuthType.API_KEY,
-                enable_ai_agent=True,
-                websocket_auth=WebSocketAuthType.JWT,
-            )
-
-    def test_websocket_jwt_auth_with_jwt_is_valid(self) -> None:
-        """Test that WebSocket JWT auth with main JWT auth is valid."""
-        config = ProjectConfig(
-            project_name="test",
-            auth=AuthType.JWT,
-            enable_ai_agent=True,
-            websocket_auth=WebSocketAuthType.JWT,
-        )
-        assert config.websocket_auth == WebSocketAuthType.JWT
-
-    def test_websocket_jwt_auth_with_both_auth_is_valid(self) -> None:
-        """Test that WebSocket JWT auth with both auth types is valid."""
-        config = ProjectConfig(
-            project_name="test",
-            auth=AuthType.BOTH,
-            enable_ai_agent=True,
-            websocket_auth=WebSocketAuthType.JWT,
-        )
-        assert config.websocket_auth == WebSocketAuthType.JWT
-
-    def test_websocket_api_key_auth_requires_api_key_auth(self) -> None:
-        """Test that WebSocket API key auth requires main API key auth to be enabled."""
-        with pytest.raises(
-            ValidationError, match="WebSocket API key authentication requires API key auth"
-        ):
-            ProjectConfig(
-                project_name="test",
-                auth=AuthType.JWT,
-                enable_ai_agent=True,
-                websocket_auth=WebSocketAuthType.API_KEY,
-            )
-
-    def test_websocket_api_key_auth_with_api_key_is_valid(self) -> None:
-        """Test that WebSocket API key auth with main API key auth is valid."""
-        config = ProjectConfig(
-            project_name="test",
-            auth=AuthType.API_KEY,
-            enable_ai_agent=True,
-            websocket_auth=WebSocketAuthType.API_KEY,
-        )
-        assert config.websocket_auth == WebSocketAuthType.API_KEY
-
-    def test_admin_require_auth_requires_jwt(self) -> None:
-        """Test that admin panel with authentication requires JWT auth."""
-        with pytest.raises(ValidationError, match="Admin panel authentication requires JWT auth"):
-            ProjectConfig(
-                project_name="test",
-                database=DatabaseType.POSTGRESQL,
-                auth=AuthType.API_KEY,
-                enable_admin_panel=True,
-                admin_require_auth=True,
-            )
-
-    def test_admin_require_auth_with_jwt_is_valid(self) -> None:
-        """Test that admin panel with authentication and JWT is valid."""
-        config = ProjectConfig(
-            project_name="test",
-            database=DatabaseType.POSTGRESQL,
-            auth=AuthType.JWT,
-            enable_admin_panel=True,
-            admin_require_auth=True,
-        )
-        assert config.enable_admin_panel is True
-        assert config.admin_require_auth is True
-
-    def test_admin_without_auth_works_without_jwt(self) -> None:
-        """Test that admin panel without authentication works without JWT."""
-        config = ProjectConfig(
-            project_name="test",
-            database=DatabaseType.POSTGRESQL,
-            auth=AuthType.API_KEY,
-            enable_admin_panel=True,
-            admin_require_auth=False,
-        )
-        assert config.enable_admin_panel is True
-        assert config.admin_require_auth is False
-
-    def test_admin_with_no_auth_at_all_works(self) -> None:
-        """Test that admin panel without auth works when no auth is configured."""
-        config = ProjectConfig(
-            project_name="test",
-            database=DatabaseType.POSTGRESQL,
-            auth=AuthType.NONE,
-            enable_admin_panel=True,
-            admin_require_auth=False,
-        )
-        assert config.enable_admin_panel is True
-        assert config.admin_require_auth is False
-
-    def test_conversation_persistence_requires_ai_agent(self) -> None:
-        """Test that conversation persistence requires AI agent to be enabled."""
-        with pytest.raises(ValidationError, match="Conversation persistence requires AI agent"):
-            ProjectConfig(
-                project_name="test",
-                database=DatabaseType.POSTGRESQL,
-                enable_ai_agent=False,
-                enable_conversation_persistence=True,
-            )
-
-    def test_conversation_persistence_with_ai_agent_is_valid(self) -> None:
-        """Test that conversation persistence with AI agent is valid."""
-        config = ProjectConfig(
-            project_name="test",
-            database=DatabaseType.POSTGRESQL,
-            enable_ai_agent=True,
-            enable_conversation_persistence=True,
-        )
-        assert config.enable_conversation_persistence is True
-        assert config.enable_ai_agent is True
 
     def test_admin_panel_requires_sqlalchemy(self) -> None:
         """Test that admin panel requires SQLAlchemy (not SQLModel)."""
@@ -1054,6 +835,7 @@ class TestNewDependencyValidations:
                 database=DatabaseType.POSTGRESQL,
                 orm_type=OrmType.SQLMODEL,
                 enable_admin_panel=True,
+                background_tasks=BackgroundTaskType.NONE,
             )
 
     def test_admin_panel_with_sqlalchemy_is_valid(self) -> None:
@@ -1063,39 +845,20 @@ class TestNewDependencyValidations:
             database=DatabaseType.POSTGRESQL,
             orm_type=OrmType.SQLALCHEMY,
             enable_admin_panel=True,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.enable_admin_panel is True
         assert config.use_sqlalchemy is True
 
-    def test_session_management_requires_jwt(self) -> None:
-        """Test that session management requires JWT auth to be enabled."""
-        with pytest.raises(ValidationError, match="Session management requires JWT auth"):
-            ProjectConfig(
-                project_name="test",
-                database=DatabaseType.POSTGRESQL,
-                auth=AuthType.API_KEY,
-                enable_session_management=True,
-            )
-
-    def test_session_management_with_jwt_is_valid(self) -> None:
-        """Test that session management with JWT auth is valid."""
+    def test_session_management_with_database_is_valid(self) -> None:
+        """Test that session management with a database is valid."""
         config = ProjectConfig(
             project_name="test",
             database=DatabaseType.POSTGRESQL,
-            auth=AuthType.JWT,
             enable_session_management=True,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.enable_session_management is True
-
-    def test_webhooks_requires_database(self) -> None:
-        """Test that webhooks require a database to be enabled."""
-        with pytest.raises(ValidationError, match="Webhooks require a database"):
-            ProjectConfig(
-                project_name="test",
-                database=DatabaseType.NONE,
-                enable_webhooks=True,
-                logfire_features=LogfireFeatures(database=False),  # Disable logfire DB
-            )
 
     def test_webhooks_with_database_is_valid(self) -> None:
         """Test that webhooks with a database is valid."""
@@ -1103,20 +866,9 @@ class TestNewDependencyValidations:
             project_name="test",
             database=DatabaseType.POSTGRESQL,
             enable_webhooks=True,
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.enable_webhooks is True
-
-    def test_logfire_database_requires_database(self) -> None:
-        """Test that Logfire database instrumentation requires a database."""
-        with pytest.raises(
-            ValidationError, match="Logfire database instrumentation requires a database"
-        ):
-            ProjectConfig(
-                project_name="test",
-                database=DatabaseType.NONE,
-                enable_logfire=True,
-                logfire_features=LogfireFeatures(database=True),
-            )
 
     def test_logfire_database_with_database_is_valid(self) -> None:
         """Test that Logfire database instrumentation with database is valid."""
@@ -1125,6 +877,7 @@ class TestNewDependencyValidations:
             database=DatabaseType.POSTGRESQL,
             enable_logfire=True,
             logfire_features=LogfireFeatures(database=True),
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.logfire_features.database is True
 
@@ -1136,6 +889,7 @@ class TestNewDependencyValidations:
                 enable_logfire=True,
                 enable_redis=False,
                 logfire_features=LogfireFeatures(redis=True),
+                background_tasks=BackgroundTaskType.NONE,
             )
 
     def test_logfire_redis_with_redis_is_valid(self) -> None:
@@ -1145,6 +899,7 @@ class TestNewDependencyValidations:
             enable_logfire=True,
             enable_redis=True,
             logfire_features=LogfireFeatures(redis=True),
+            background_tasks=BackgroundTaskType.NONE,
         )
         assert config.logfire_features.redis is True
 
@@ -1205,3 +960,49 @@ class TestNewDependencyValidations:
                 background_tasks=BackgroundTaskType.ARQ,
                 enable_redis=False,
             )
+
+    def test_database_none_raises_error(self) -> None:
+        """Test that DatabaseType.NONE raises validation error."""
+        with pytest.raises(ValidationError, match="A database is required"):
+            ProjectConfig(
+                project_name="test",
+                database=DatabaseType.NONE,
+                background_tasks=BackgroundTaskType.NONE,
+            )
+
+    def test_pgvector_requires_postgresql(self) -> None:
+        """Test that pgvector vector store requires PostgreSQL database."""
+        with pytest.raises(ValidationError, match="pgvector requires PostgreSQL database"):
+            ProjectConfig(
+                project_name="test",
+                database=DatabaseType.SQLITE,
+                rag_features=RAGFeatures(
+                    enable_rag=True,
+                    vector_store=VectorStoreType.PGVECTOR,
+                ),
+                background_tasks=BackgroundTaskType.NONE,
+            )
+
+
+class TestPackageVersionFallback:
+    """Tests for __init__.py PackageNotFoundError fallback."""
+
+    def test_version_fallback_on_package_not_found(self) -> None:
+        """Test that __version__ falls back to '0.0.0' when PackageNotFoundError is raised."""
+        from importlib.metadata import PackageNotFoundError
+
+        with patch("importlib.metadata.version", side_effect=PackageNotFoundError("not found")):
+            # Re-import the module to trigger the fallback
+            import importlib
+
+            import fastapi_gen
+
+            importlib.reload(fastapi_gen)
+            assert fastapi_gen.__version__ == "0.0.0"
+
+        # Reload again to restore normal state
+        import importlib
+
+        import fastapi_gen
+
+        importlib.reload(fastapi_gen)

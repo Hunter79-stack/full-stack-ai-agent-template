@@ -8,16 +8,19 @@ from rich.console import Console
 from . import __version__
 from .config import (
     AIFrameworkType,
-    AuthType,
     BackgroundTaskType,
+    BrandColorType,
     CIType,
     DatabaseType,
     FrontendType,
     LLMProviderType,
     OAuthProvider,
     OrmType,
+    PdfParserType,
     ProjectConfig,
-    WebSocketAuthType,
+    RAGFeatures,
+    RerankerType,
+    VectorStoreType,
 )
 from .generator import generate_project, post_generation_tasks
 from .prompts import confirm_generation, run_interactive_prompts, show_summary
@@ -61,7 +64,7 @@ def new(output: Path | None, no_input: bool, name: str | None) -> None:
                 console.print("[red]Error:[/] --name is required when using --no-input")
                 raise SystemExit(1)
 
-            config = ProjectConfig(project_name=name)
+            config = ProjectConfig(project_name=name, background_tasks=BackgroundTaskType.NONE)
         else:
             config = run_interactive_prompts()
             show_summary(config)
@@ -92,7 +95,7 @@ def new(output: Path | None, no_input: bool, name: str | None) -> None:
 )
 @click.option(
     "--database",
-    type=click.Choice(["postgresql", "mongodb", "sqlite", "none"]),
+    type=click.Choice(["postgresql", "mongodb", "sqlite"]),
     default="postgresql",
     help="Database type",
 )
@@ -102,17 +105,10 @@ def new(output: Path | None, no_input: bool, name: str | None) -> None:
     default="sqlalchemy",
     help="ORM library (sqlalchemy or sqlmodel). SQLModel only works with PostgreSQL/SQLite",
 )
-@click.option(
-    "--auth",
-    type=click.Choice(["jwt", "api_key", "both", "none"]),
-    default="jwt",
-    help="Authentication method",
-)
 @click.option("--no-logfire", is_flag=True, help="Disable Logfire integration")
 @click.option("--no-docker", is_flag=True, help="Disable Docker files")
 @click.option("--no-env", is_flag=True, help="Skip .env file generation")
 @click.option("--minimal", is_flag=True, help="Create minimal project (no extras)")
-@click.option("--no-example-crud", is_flag=True, help="Skip example CRUD endpoint")
 @click.option(
     "--frontend",
     type=click.Choice(["none", "nextjs"]),
@@ -132,6 +128,18 @@ def new(output: Path | None, no_input: bool, name: str | None) -> None:
     help="Frontend server port (default: 3000)",
 )
 @click.option(
+    "--brand-color",
+    type=click.Choice(["blue", "green", "red", "violet", "orange"]),
+    default="blue",
+    help="Brand color theme for frontend (default: blue)",
+)
+@click.option(
+    "--timezone",
+    type=str,
+    default="UTC",
+    help="IANA timezone (e.g. UTC, Europe/Warsaw, America/New_York)",
+)
+@click.option(
     "--db-pool-size",
     type=int,
     default=5,
@@ -144,12 +152,6 @@ def new(output: Path | None, no_input: bool, name: str | None) -> None:
     help="Database max overflow connections (default: 10)",
 )
 @click.option(
-    "--ai-agent",
-    is_flag=True,
-    default=False,
-    help="Enable AI agent with WebSocket streaming",
-)
-@click.option(
     "--ai-framework",
     type=click.Choice(["pydantic_ai", "langchain", "langgraph", "crewai", "deepagents"]),
     default="pydantic_ai",
@@ -157,26 +159,14 @@ def new(output: Path | None, no_input: bool, name: str | None) -> None:
 )
 @click.option(
     "--llm-provider",
-    type=click.Choice(["openai", "anthropic", "openrouter"]),
+    type=click.Choice(["openai", "anthropic", "google", "openrouter"]),
     default="openai",
     help="LLM provider (default: openai). Note: openrouter only works with pydantic_ai",
-)
-@click.option(
-    "--conversation-persistence",
-    is_flag=True,
-    help="Enable conversation persistence (requires --ai-agent and a database)",
-)
-@click.option(
-    "--websocket-auth",
-    type=click.Choice(["none", "jwt", "api_key"]),
-    default="none",
-    help="WebSocket authentication method",
 )
 @click.option("--redis", is_flag=True, help="Enable Redis")
 @click.option("--caching", is_flag=True, help="Enable caching (requires --redis)")
 @click.option("--rate-limiting", is_flag=True, help="Enable rate limiting")
 @click.option("--admin-panel", is_flag=True, help="Enable admin panel (SQLAdmin)")
-@click.option("--websockets", is_flag=True, help="Enable WebSocket support")
 @click.option(
     "--task-queue",
     type=click.Choice(["none", "celery", "taskiq", "arq"]),
@@ -207,40 +197,69 @@ def new(output: Path | None, no_input: bool, name: str | None) -> None:
     default="3.12",
     help="Python version",
 )
-@click.option("--i18n", is_flag=True, help="Enable internationalization")
 @click.option(
     "--preset",
     type=click.Choice(["production", "ai-agent"]),
     default=None,
     help="Apply configuration preset",
 )
+@click.option(
+    "--rag",
+    is_flag=True,
+    default=False,
+    help="Enable RAG feature.",
+)
+@click.option(
+    "--vector-store",
+    type=click.Choice(["milvus", "qdrant", "chromadb", "pgvector"]),
+    default="milvus",
+    help="Vector store backend (default: milvus)",
+)
+@click.option(
+    "--gdrive-rag",
+    is_flag=True,
+    default=False,
+    help="Use Google Drive for document ingestion",
+)
+@click.option(
+    "--s3-rag",
+    is_flag=True,
+    default=False,
+    help="Use S3/MinIO for document ingestion",
+)
+@click.option(
+    "--reranker",
+    type=click.Choice(["none", "cohere", "cross_encoder"]),
+    default="none",
+    help="Choose reranking logic.",
+)
+@click.option(
+    "--pdf-parser",
+    type=click.Choice(["pymupdf", "liteparse", "llamaparse", "all"]),
+    default="pymupdf",
+    help="PDF parser (pymupdf=local, liteparse=local AI, llamaparse=cloud, all=runtime selection)",
+)
 def create(
     name: str,
     output: Path | None,
     database: str,
     orm: str,
-    auth: str,
     no_logfire: bool,
     no_docker: bool,
     no_env: bool,
     minimal: bool,
-    no_example_crud: bool,
     frontend: str,
     backend_port: int,
     frontend_port: int,
     db_pool_size: int,
     db_max_overflow: int,
-    ai_agent: bool,
     ai_framework: str,
     llm_provider: str,
-    conversation_persistence: bool,
-    websocket_auth: str,
     # Optional features
     redis: bool,
     caching: bool,
     rate_limiting: bool,
     admin_panel: bool,
-    websockets: bool,
     task_queue: str,
     oauth_google: bool,
     session_management: bool,
@@ -252,7 +271,14 @@ def create(
     webhooks: bool,
     langsmith: bool,
     python_version: str,
-    i18n: bool,
+    rag: bool,
+    vector_store: str,
+    gdrive_rag: bool,
+    s3_rag: bool,
+    reranker: str,
+    pdf_parser: str,
+    brand_color: str,
+    timezone: str,
     preset: str | None,
 ) -> None:
     """Create a new FastAPI project with specified options.
@@ -265,7 +291,6 @@ def create(
             config = ProjectConfig(
                 project_name=name,
                 database=DatabaseType.POSTGRESQL,
-                auth=AuthType.JWT,
                 enable_logfire=True,
                 enable_redis=True,
                 enable_caching=True,
@@ -276,54 +301,53 @@ def create(
                 enable_kubernetes=True,
                 ci_type=CIType.GITHUB,
                 generate_env=not no_env,
-                include_example_crud=True,
                 frontend=FrontendType(frontend),
+                brand_color=BrandColorType(brand_color),
                 backend_port=backend_port,
                 frontend_port=frontend_port,
                 python_version=python_version,
+                timezone=timezone,
             )
         elif preset == "ai-agent":
             config = ProjectConfig(
                 project_name=name,
                 database=DatabaseType.POSTGRESQL,
-                auth=AuthType.JWT,
                 enable_logfire=True,
                 enable_redis=True,
-                enable_ai_agent=True,
                 ai_framework=AIFrameworkType(ai_framework),
                 llm_provider=LLMProviderType(llm_provider),
-                enable_websockets=True,
-                enable_conversation_persistence=True,
                 enable_langsmith=ai_framework in ("langchain", "langgraph", "deepagents"),
                 enable_docker=True,
                 ci_type=CIType.GITHUB,
                 generate_env=not no_env,
                 frontend=FrontendType(frontend),
+                brand_color=BrandColorType(brand_color),
                 backend_port=backend_port,
                 frontend_port=frontend_port,
                 python_version=python_version,
+                timezone=timezone,
             )
         elif minimal:
             config = ProjectConfig(
                 project_name=name,
-                database=DatabaseType.NONE,
-                auth=AuthType.NONE,
+                database=DatabaseType.SQLITE,
                 enable_logfire=False,
                 enable_redis=False,
                 enable_caching=False,
                 enable_rate_limiting=False,
                 enable_pagination=False,
                 enable_admin_panel=False,
-                enable_websockets=False,
                 enable_docker=False,
                 enable_kubernetes=False,
+                background_tasks=BackgroundTaskType.NONE,
                 ci_type=CIType.NONE,
                 generate_env=not no_env,
-                include_example_crud=False,
                 frontend=FrontendType(frontend),
+                brand_color=BrandColorType(brand_color),
                 backend_port=backend_port,
                 frontend_port=frontend_port,
                 python_version=python_version,
+                timezone=timezone,
             )
         else:
             # Full custom configuration with all options
@@ -331,26 +355,21 @@ def create(
                 project_name=name,
                 database=DatabaseType(database),
                 orm_type=OrmType(orm),
-                auth=AuthType(auth),
                 enable_logfire=not no_logfire,
                 enable_docker=not no_docker,
                 generate_env=not no_env,
-                include_example_crud=not no_example_crud,
                 frontend=FrontendType(frontend),
+                brand_color=BrandColorType(brand_color),
                 backend_port=backend_port,
                 frontend_port=frontend_port,
                 db_pool_size=db_pool_size,
                 db_max_overflow=db_max_overflow,
-                enable_ai_agent=ai_agent,
                 ai_framework=AIFrameworkType(ai_framework),
                 llm_provider=LLMProviderType(llm_provider),
-                enable_conversation_persistence=conversation_persistence,
-                websocket_auth=WebSocketAuthType(websocket_auth),
                 enable_redis=redis,
                 enable_caching=caching,
                 enable_rate_limiting=rate_limiting,
                 enable_admin_panel=admin_panel,
-                enable_websockets=websockets,
                 background_tasks=BackgroundTaskType(task_queue),
                 oauth_provider=OAuthProvider.GOOGLE if oauth_google else OAuthProvider.NONE,
                 enable_session_management=session_management,
@@ -362,20 +381,27 @@ def create(
                 enable_webhooks=webhooks,
                 enable_langsmith=langsmith,
                 python_version=python_version,
-                enable_i18n=i18n,
+                timezone=timezone,
+                rag_features=RAGFeatures(
+                    enable_rag=rag,
+                    vector_store=VectorStoreType(vector_store),
+                    enable_google_drive_ingestion=gdrive_rag,
+                    enable_s3_ingestion=s3_rag,
+                    reranker_type=RerankerType(reranker),
+                    pdf_parser=PdfParserType(pdf_parser),
+                ),
             )
 
         console.print(f"[cyan]Creating project:[/] {name}")
         if preset:
             console.print(f"[dim]Preset: {preset}[/]")
         console.print(f"[dim]Database: {config.database.value}[/]")
-        console.print(f"[dim]Auth: {config.auth.value}[/]")
+        console.print("[dim]Auth: JWT + API Key[/]")
         if config.frontend != FrontendType.NONE:
             console.print(f"[dim]Frontend: {config.frontend.value}[/]")
-        if config.enable_ai_agent:
-            console.print(
-                f"[dim]AI Agent: {config.ai_framework.value} ({config.llm_provider.value})[/]"
-            )
+        console.print(
+            f"[dim]AI Agent: {config.ai_framework.value} ({config.llm_provider.value})[/]"
+        )
         if config.background_tasks != BackgroundTaskType.NONE:
             console.print(f"[dim]Task Queue: {config.background_tasks.value}[/]")
         console.print()
@@ -399,30 +425,28 @@ def templates() -> None:
 
     console.print("[bold]Presets:[/]")
     console.print("  --preset production   Full production setup (Redis, Sentry, K8s, etc.)")
-    console.print("  --preset ai-agent     AI agent with WebSocket streaming")
-    console.print("  --minimal             Minimal project (no extras)")
+    console.print(
+        "  --preset ai-agent     AI agent with WebSocket streaming + conversation persistence"
+    )
+    console.print("  --minimal             Minimal project (SQLite, no Docker/K8s/CI, no Redis)")
     console.print()
 
     console.print("[bold]Databases:[/]")
     console.print("  --database postgresql  PostgreSQL with asyncpg (async)")
     console.print("  --database mongodb     MongoDB with Motor (async)")
     console.print("  --database sqlite      SQLite with SQLAlchemy (sync)")
-    console.print("  --database none        No database")
     console.print("  --orm sqlalchemy       SQLAlchemy (default)")
     console.print("  --orm sqlmodel         SQLModel (PostgreSQL/SQLite only)")
     console.print()
 
-    console.print("[bold]Authentication:[/]")
-    console.print("  --auth jwt             JWT + User Management")
-    console.print("  --auth api_key         API Key (header-based)")
-    console.print("  --auth both            JWT with API Key fallback")
-    console.print("  --auth none            No authentication")
+    console.print("[bold]Authentication (always included):[/]")
+    console.print("  JWT + User Management (email/password, roles, profiles)")
+    console.print("  API Key utility (X-API-Key header, available for custom use)")
     console.print("  --oauth-google         Enable Google OAuth")
     console.print("  --session-management   Enable session management")
     console.print()
 
     console.print("[bold]AI Agent:[/]")
-    console.print("  --ai-agent                      Enable AI agent with WebSocket streaming")
     console.print("  --ai-framework pydantic_ai      PydanticAI (recommended)")
     console.print("  --ai-framework langchain        LangChain")
     console.print("  --ai-framework langgraph        LangGraph (ReAct agent)")
@@ -430,9 +454,8 @@ def templates() -> None:
     console.print("  --ai-framework deepagents       DeepAgents (agentic coding, HITL)")
     console.print("  --llm-provider openai           OpenAI (gpt-4o-mini)")
     console.print("  --llm-provider anthropic        Anthropic (claude-sonnet-4-5)")
+    console.print("  --llm-provider google           Google Gemini (gemini-2.0-flash)")
     console.print("  --llm-provider openrouter       OpenRouter (pydantic_ai only)")
-    console.print("  --conversation-persistence      Save chat history to database")
-    console.print("  --websocket-auth none|jwt|api_key  WebSocket auth method")
     console.print()
 
     console.print("[bold]Background Tasks:[/]")
@@ -444,8 +467,15 @@ def templates() -> None:
 
     console.print("[bold]Frontend:[/]")
     console.print("  --frontend none        API only (no frontend)")
-    console.print("  --frontend nextjs      Next.js 15 (App Router, TypeScript, Bun)")
-    console.print("  --i18n                 Enable internationalization (next-intl)")
+    console.print("  --frontend nextjs      Next.js 15 (App Router, TypeScript, Bun, i18n)")
+    console.print()
+
+    console.print("[bold]RAG (Retrieval Augmented Generation):[/]")
+    console.print("  --rag                               Enable RAG")
+    console.print("  --vector-store milvus|qdrant|chromadb|pgvector  Vector store backend")
+    console.print("  --gdrive-rag                        Enable Google Drive ingestion")
+    console.print("  --reranker none|cohere|cross_encoder Reranker logic")
+    console.print("  --pdf-parser pymupdf|liteparse|llamaparse  PDF parser")
     console.print()
 
     console.print("[bold]Integrations:[/]")
@@ -453,7 +483,6 @@ def templates() -> None:
     console.print("  --caching          Enable caching (requires --redis)")
     console.print("  --rate-limiting    Enable rate limiting")
     console.print("  --admin-panel      Enable admin panel (SQLAdmin)")
-    console.print("  --websockets       Enable WebSocket support")
     console.print("  --file-storage     Enable S3/MinIO file storage")
     console.print("  --webhooks         Enable webhooks support")
     console.print()
@@ -475,7 +504,6 @@ def templates() -> None:
 
     console.print("[bold]Other:[/]")
     console.print("  --python-version 3.11|3.12|3.13  Python version")
-    console.print("  --no-example-crud  Skip example CRUD endpoint")
     console.print("  --no-env           Skip .env file generation")
     console.print("  --backend-port N   Backend port (default: 8000)")
     console.print("  --frontend-port N  Frontend port (default: 3000)")

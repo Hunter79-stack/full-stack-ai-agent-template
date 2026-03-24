@@ -14,6 +14,7 @@ data:
   DEBUG: "false"
   PROJECT_NAME: "{{ cookiecutter.project_name }}"
   API_V1_STR: "/api/v1"
+  TIMEZONE: "{{ cookiecutter.timezone }}"
 
 {%- if cookiecutter.use_postgresql %}
   # PostgreSQL settings
@@ -52,6 +53,18 @@ data:
   # Logfire settings
   LOGFIRE_SERVICE_NAME: "{{ cookiecutter.project_slug }}"
   LOGFIRE_ENVIRONMENT: "production"
+{%- endif %}
+
+{%- if cookiecutter.use_milvus %}
+  # Milvus settings
+  MILVUS_HOST: "milvus-service"
+  MILVUS_PORT: "19530"
+{%- endif %}
+
+{%- if cookiecutter.use_qdrant %}
+  # Qdrant settings
+  QDRANT_HOST: "qdrant-service"
+  QDRANT_PORT: "6333"
 {%- endif %}
 
 {%- if cookiecutter.enable_cors %}

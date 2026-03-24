@@ -1,10 +1,11 @@
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_postgresql %}
+{%- if cookiecutter.use_postgresql %}
 """Conversation service (PostgreSQL async).
 
 Contains business logic for conversation, message, and tool call operations.
 """
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,20 +28,46 @@ class ConversationService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    # =========================================================================
+    # Export Methods
+
+    async def export_all(self) -> list[dict[str, Any]]:
+        """Export all conversations with messages for admin download."""
+        import json
+
+        items, _ = await self.list_conversations(skip=0, limit=10000, include_archived=True)
+        export_data = []
+        for conv in items:
+            messages, _ = await self.list_messages(conv.id, skip=0, limit=10000, include_tool_calls=True)
+            export_data.append({
+                "id": str(conv.id), "title": conv.title,
+                "created_at": conv.created_at.isoformat() if conv.created_at else None,
+                "updated_at": conv.updated_at.isoformat() if conv.updated_at else None,
+                "is_archived": conv.is_archived,
+                "messages": [{"id": str(m.id), "role": m.role, "content": m.content,
+                    "created_at": m.created_at.isoformat() if m.created_at else None,
+                    "tool_calls": [{"tool_name": tc.tool_name,
+                        "args": tc.args if isinstance(tc.args, dict) else json.loads(tc.args) if isinstance(tc.args, str) and tc.args.strip() else {},
+                        "result": tc.result, "status": tc.status}
+                        for tc in (m.tool_calls or [])] if hasattr(m, "tool_calls") and m.tool_calls else [],
+                } for m in messages],
+            })
+        return export_data
+
     # Conversation Methods
-    # =========================================================================
 
     async def get_conversation(
         self,
         conversation_id: UUID,
         *,
         include_messages: bool = False,
+{%- if cookiecutter.use_jwt %}
+        user_id: UUID | None = None,
+{%- endif %}
     ) -> Conversation:
         """Get conversation by ID.
 
         Raises:
-            NotFoundError: If conversation does not exist.
+            NotFoundError: If conversation does not exist or user has no access.
         """
         conversation = await conversation_repo.get_conversation_by_id(
             self.db, conversation_id, include_messages=include_messages
@@ -50,6 +77,18 @@ class ConversationService:
                 message="Conversation not found",
                 details={"conversation_id": str(conversation_id)},
             )
+{%- if cookiecutter.use_jwt %}
+        if (
+            user_id is not None
+            and hasattr(conversation, "user_id")
+            and conversation.user_id is not None
+            and str(conversation.user_id) != str(user_id)
+        ):
+            raise NotFoundError(
+                message="Conversation not found",
+                details={"conversation_id": str(conversation_id)},
+            )
+{%- endif %}
         return conversation
 
     async def list_conversations(
@@ -102,24 +141,45 @@ class ConversationService:
         self,
         conversation_id: UUID,
         data: ConversationUpdate,
+{%- if cookiecutter.use_jwt %}
+        user_id: UUID | None = None,
+{%- endif %}
     ) -> Conversation:
         """Update a conversation.
 
         Raises:
             NotFoundError: If conversation does not exist.
         """
-        conversation = await self.get_conversation(conversation_id)
+        conversation = await self.get_conversation(
+            conversation_id,
+{%- if cookiecutter.use_jwt %}
+            user_id=user_id,
+{%- endif %}
+        )
         update_data = data.model_dump(exclude_unset=True)
         return await conversation_repo.update_conversation(
             self.db, db_conversation=conversation, update_data=update_data
         )
 
-    async def archive_conversation(self, conversation_id: UUID) -> Conversation:
+    async def archive_conversation(
+        self,
+        conversation_id: UUID,
+{%- if cookiecutter.use_jwt %}
+        user_id: UUID | None = None,
+{%- endif %}
+    ) -> Conversation:
         """Archive a conversation.
 
         Raises:
-            NotFoundError: If conversation does not exist.
+            NotFoundError: If conversation does not exist or user has no access.
         """
+        # Verify ownership first
+        await self.get_conversation(
+            conversation_id,
+{%- if cookiecutter.use_jwt %}
+            user_id=user_id,
+{%- endif %}
+        )
         conversation = await conversation_repo.archive_conversation(
             self.db, conversation_id
         )
@@ -130,12 +190,25 @@ class ConversationService:
             )
         return conversation
 
-    async def delete_conversation(self, conversation_id: UUID) -> bool:
+    async def delete_conversation(
+        self,
+        conversation_id: UUID,
+{%- if cookiecutter.use_jwt %}
+        user_id: UUID | None = None,
+{%- endif %}
+    ) -> bool:
         """Delete a conversation.
 
         Raises:
-            NotFoundError: If conversation does not exist.
+            NotFoundError: If conversation does not exist or user has no access.
         """
+        # Verify ownership first
+        await self.get_conversation(
+            conversation_id,
+{%- if cookiecutter.use_jwt %}
+            user_id=user_id,
+{%- endif %}
+        )
         deleted = await conversation_repo.delete_conversation(self.db, conversation_id)
         if not deleted:
             raise NotFoundError(
@@ -144,9 +217,7 @@ class ConversationService:
             )
         return True
 
-    # =========================================================================
     # Message Methods
-    # =========================================================================
 
     async def get_message(self, message_id: UUID) -> Message:
         """Get message by ID.
@@ -222,9 +293,7 @@ class ConversationService:
             )
         return True
 
-    # =========================================================================
     # Tool Call Methods
-    # =========================================================================
 
     async def get_tool_call(self, tool_call_id: UUID) -> ToolCall:
         """Get tool call by ID.
@@ -287,13 +356,27 @@ class ConversationService:
         )
 
 
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_sqlite %}
+    async def link_files_to_message(self, message_id: UUID, file_ids: list[str]) -> None:
+        """Link uploaded chat files to a message."""
+        if not file_ids:
+            return
+        from app.db.models.chat_file import ChatFile
+        from sqlalchemy import update as sa_update
+        file_uuids = [UUID(fid) for fid in file_ids]
+        await self.db.execute(
+            sa_update(ChatFile).where(ChatFile.id.in_(file_uuids)).values(message_id=message_id)
+        )
+        await self.db.commit()
+
+
+{%- elif cookiecutter.use_sqlite %}
 """Conversation service (SQLite sync).
 
 Contains business logic for conversation, message, and tool call operations.
 """
 
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -315,20 +398,46 @@ class ConversationService:
     def __init__(self, db: Session):
         self.db = db
 
-    # =========================================================================
+    # Export Methods
+
+    def export_all(self) -> list[dict[str, Any]]:
+        """Export all conversations with messages for admin download."""
+        import json as _json
+
+        items, _ = self.list_conversations(skip=0, limit=10000, include_archived=True)
+        export_data = []
+        for conv in items:
+            messages, _ = self.list_messages(conv.id, skip=0, limit=10000, include_tool_calls=True)
+            export_data.append({
+                "id": str(conv.id), "title": conv.title,
+                "created_at": conv.created_at.isoformat() if conv.created_at else None,
+                "updated_at": conv.updated_at.isoformat() if conv.updated_at else None,
+                "is_archived": conv.is_archived,
+                "messages": [{"id": str(m.id), "role": m.role, "content": m.content,
+                    "created_at": m.created_at.isoformat() if m.created_at else None,
+                    "tool_calls": [{"tool_name": tc.tool_name,
+                        "args": _json.loads(tc.args) if isinstance(tc.args, str) else tc.args,
+                        "result": tc.result, "status": tc.status}
+                        for tc in (m.tool_calls or [])] if hasattr(m, "tool_calls") and m.tool_calls else [],
+                } for m in messages],
+            })
+        return export_data
+
     # Conversation Methods
-    # =========================================================================
 
     def get_conversation(
         self,
         conversation_id: str,
         *,
         include_messages: bool = False,
+{%- if cookiecutter.use_jwt %}
+        user_id: str | None = None,
+{%- endif %}
     ) -> Conversation:
         """Get conversation by ID.
 
         Raises:
-            NotFoundError: If conversation does not exist.
+            NotFoundError: If conversation does not exist or user has no access.
         """
         conversation = conversation_repo.get_conversation_by_id(
             self.db, conversation_id, include_messages=include_messages
@@ -338,6 +447,18 @@ class ConversationService:
                 message="Conversation not found",
                 details={"conversation_id": conversation_id},
             )
+{%- if cookiecutter.use_jwt %}
+        if (
+            user_id is not None
+            and hasattr(conversation, "user_id")
+            and conversation.user_id is not None
+            and str(conversation.user_id) != str(user_id)
+        ):
+            raise NotFoundError(
+                message="Conversation not found",
+                details={"conversation_id": conversation_id},
+            )
+{%- endif %}
         return conversation
 
     def list_conversations(
@@ -390,24 +511,44 @@ class ConversationService:
         self,
         conversation_id: str,
         data: ConversationUpdate,
+{%- if cookiecutter.use_jwt %}
+        user_id: str | None = None,
+{%- endif %}
     ) -> Conversation:
         """Update a conversation.
 
         Raises:
-            NotFoundError: If conversation does not exist.
+            NotFoundError: If conversation does not exist or user has no access.
         """
-        conversation = self.get_conversation(conversation_id)
+        conversation = self.get_conversation(
+            conversation_id,
+{%- if cookiecutter.use_jwt %}
+            user_id=user_id,
+{%- endif %}
+        )
         update_data = data.model_dump(exclude_unset=True)
         return conversation_repo.update_conversation(
             self.db, db_conversation=conversation, update_data=update_data
         )
 
-    def archive_conversation(self, conversation_id: str) -> Conversation:
+    def archive_conversation(
+        self,
+        conversation_id: str,
+{%- if cookiecutter.use_jwt %}
+        user_id: str | None = None,
+{%- endif %}
+    ) -> Conversation:
         """Archive a conversation.
 
         Raises:
-            NotFoundError: If conversation does not exist.
+            NotFoundError: If conversation does not exist or user has no access.
         """
+        self.get_conversation(
+            conversation_id,
+{%- if cookiecutter.use_jwt %}
+            user_id=user_id,
+{%- endif %}
+        )
         conversation = conversation_repo.archive_conversation(self.db, conversation_id)
         if not conversation:
             raise NotFoundError(
@@ -416,12 +557,24 @@ class ConversationService:
             )
         return conversation
 
-    def delete_conversation(self, conversation_id: str) -> bool:
+    def delete_conversation(
+        self,
+        conversation_id: str,
+{%- if cookiecutter.use_jwt %}
+        user_id: str | None = None,
+{%- endif %}
+    ) -> bool:
         """Delete a conversation.
 
         Raises:
-            NotFoundError: If conversation does not exist.
+            NotFoundError: If conversation does not exist or user has no access.
         """
+        self.get_conversation(
+            conversation_id,
+{%- if cookiecutter.use_jwt %}
+            user_id=user_id,
+{%- endif %}
+        )
         deleted = conversation_repo.delete_conversation(self.db, conversation_id)
         if not deleted:
             raise NotFoundError(
@@ -430,9 +583,7 @@ class ConversationService:
             )
         return True
 
-    # =========================================================================
     # Message Methods
-    # =========================================================================
 
     def get_message(self, message_id: str) -> Message:
         """Get message by ID.
@@ -508,9 +659,7 @@ class ConversationService:
             )
         return True
 
-    # =========================================================================
     # Tool Call Methods
-    # =========================================================================
 
     def get_tool_call(self, tool_call_id: str) -> ToolCall:
         """Get tool call by ID.
@@ -573,7 +722,19 @@ class ConversationService:
         )
 
 
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+    def link_files_to_message(self, message_id: str, file_ids: list[str]) -> None:
+        """Link uploaded chat files to a message."""
+        if not file_ids:
+            return
+        from app.db.models.chat_file import ChatFile
+        from sqlalchemy import update as sa_update
+        self.db.execute(
+            sa_update(ChatFile).where(ChatFile.id.in_(file_ids)).values(message_id=message_id)
+        )
+        self.db.commit()
+
+
+{%- elif cookiecutter.use_mongodb %}
 """Conversation service (MongoDB).
 
 Contains business logic for conversation, message, and tool call operations.
@@ -596,20 +757,21 @@ from app.schemas.conversation import (
 class ConversationService:
     """Service for conversation-related business logic."""
 
-    # =========================================================================
     # Conversation Methods
-    # =========================================================================
 
     async def get_conversation(
         self,
         conversation_id: str,
         *,
         include_messages: bool = False,
+{%- if cookiecutter.use_jwt %}
+        user_id: str | None = None,
+{%- endif %}
     ) -> Conversation:
         """Get conversation by ID.
 
         Raises:
-            NotFoundError: If conversation does not exist.
+            NotFoundError: If conversation does not exist or user has no access.
         """
         conversation = await conversation_repo.get_conversation_by_id(
             conversation_id, include_messages=include_messages
@@ -619,6 +781,18 @@ class ConversationService:
                 message="Conversation not found",
                 details={"conversation_id": conversation_id},
             )
+{%- if cookiecutter.use_jwt %}
+        if (
+            user_id is not None
+            and hasattr(conversation, "user_id")
+            and conversation.user_id is not None
+            and str(conversation.user_id) != str(user_id)
+        ):
+            raise NotFoundError(
+                message="Conversation not found",
+                details={"conversation_id": conversation_id},
+            )
+{%- endif %}
         return conversation
 
     async def list_conversations(
@@ -668,24 +842,44 @@ class ConversationService:
         self,
         conversation_id: str,
         data: ConversationUpdate,
+{%- if cookiecutter.use_jwt %}
+        user_id: str | None = None,
+{%- endif %}
     ) -> Conversation:
         """Update a conversation.
 
         Raises:
-            NotFoundError: If conversation does not exist.
+            NotFoundError: If conversation does not exist or user has no access.
         """
-        conversation = await self.get_conversation(conversation_id)
+        conversation = await self.get_conversation(
+            conversation_id,
+{%- if cookiecutter.use_jwt %}
+            user_id=user_id,
+{%- endif %}
+        )
         update_data = data.model_dump(exclude_unset=True)
         return await conversation_repo.update_conversation(
             db_conversation=conversation, update_data=update_data
         )
 
-    async def archive_conversation(self, conversation_id: str) -> Conversation:
+    async def archive_conversation(
+        self,
+        conversation_id: str,
+{%- if cookiecutter.use_jwt %}
+        user_id: str | None = None,
+{%- endif %}
+    ) -> Conversation:
         """Archive a conversation.
 
         Raises:
-            NotFoundError: If conversation does not exist.
+            NotFoundError: If conversation does not exist or user has no access.
         """
+        await self.get_conversation(
+            conversation_id,
+{%- if cookiecutter.use_jwt %}
+            user_id=user_id,
+{%- endif %}
+        )
         conversation = await conversation_repo.archive_conversation(conversation_id)
         if not conversation:
             raise NotFoundError(
@@ -694,12 +888,24 @@ class ConversationService:
             )
         return conversation
 
-    async def delete_conversation(self, conversation_id: str) -> bool:
+    async def delete_conversation(
+        self,
+        conversation_id: str,
+{%- if cookiecutter.use_jwt %}
+        user_id: str | None = None,
+{%- endif %}
+    ) -> bool:
         """Delete a conversation.
 
         Raises:
-            NotFoundError: If conversation does not exist.
+            NotFoundError: If conversation does not exist or user has no access.
         """
+        await self.get_conversation(
+            conversation_id,
+{%- if cookiecutter.use_jwt %}
+            user_id=user_id,
+{%- endif %}
+        )
         deleted = await conversation_repo.delete_conversation(conversation_id)
         if not deleted:
             raise NotFoundError(
@@ -708,9 +914,7 @@ class ConversationService:
             )
         return True
 
-    # =========================================================================
     # Message Methods
-    # =========================================================================
 
     async def get_message(self, message_id: str) -> Message:
         """Get message by ID.
@@ -732,6 +936,7 @@ class ConversationService:
         *,
         skip: int = 0,
         limit: int = 100,
+        include_tool_calls: bool = False,
     ) -> tuple[list[Message], int]:
         """List messages in a conversation.
 
@@ -744,6 +949,7 @@ class ConversationService:
             conversation_id,
             skip=skip,
             limit=limit,
+            include_tool_calls=include_tool_calls,
         )
         total = await conversation_repo.count_messages(conversation_id)
         return items, total
@@ -782,9 +988,7 @@ class ConversationService:
             )
         return True
 
-    # =========================================================================
     # Tool Call Methods
-    # =========================================================================
 
     async def get_tool_call(self, tool_call_id: str) -> ToolCall:
         """Get tool call by ID.

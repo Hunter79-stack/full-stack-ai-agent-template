@@ -77,7 +77,7 @@ class UserService:
             AuthenticationError: If credentials are invalid or user is inactive.
         """
         user = await user_repo.get_by_email(self.db, email)
-        if not user or not verify_password(password, user.hashed_password):
+        if not user or not user.hashed_password or not verify_password(password, user.hashed_password):
             raise AuthenticationError(message="Invalid email or password")
         if not user.is_active:
             raise AuthenticationError(message="User account is disabled")
@@ -96,6 +96,34 @@ class UserService:
             update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
 
         return await user_repo.update(self.db, db_user=user, update_data=update_data)
+
+    async def update_avatar(self, user_id: UUID, file_data: bytes, filename: str, content_type: str) -> User:
+        """Upload or replace avatar image.
+
+        Raises:
+            ValueError: If content type is not allowed or file is too large.
+        """
+        import contextlib
+
+        from app.services.file_storage import get_file_storage
+
+        ALLOWED_AVATAR_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+        if content_type not in ALLOWED_AVATAR_TYPES:
+            raise ValueError("Only JPEG, PNG, WebP, and GIF images are allowed")
+        if len(file_data) > 2 * 1024 * 1024:
+            raise ValueError("Avatar image too large. Maximum 2MB.")
+
+        storage = get_file_storage()
+
+        # Delete old avatar if exists
+        user = await self.get_by_id(user_id)
+        if user.avatar_url:
+            with contextlib.suppress(Exception):
+                await storage.delete(user.avatar_url)
+
+        # Save new avatar
+        storage_path = await storage.save(f"avatars/{user_id}", filename, file_data)
+        return await user_repo.update_avatar(self.db, user_id, storage_path)
 
     async def delete(self, user_id: UUID) -> User:
         """Delete user.
@@ -222,7 +250,7 @@ class UserService:
             AuthenticationError: If credentials are invalid or user is inactive.
         """
         user = user_repo.get_by_email(self.db, email)
-        if not user or not verify_password(password, user.hashed_password):
+        if not user or not user.hashed_password or not verify_password(password, user.hashed_password):
             raise AuthenticationError(message="Invalid email or password")
         if not user.is_active:
             raise AuthenticationError(message="User account is disabled")
@@ -361,7 +389,7 @@ class UserService:
             AuthenticationError: If credentials are invalid or user is inactive.
         """
         user = await user_repo.get_by_email(email)
-        if not user or not verify_password(password, user.hashed_password):
+        if not user or not user.hashed_password or not verify_password(password, user.hashed_password):
             raise AuthenticationError(message="Invalid email or password")
         if not user.is_active:
             raise AuthenticationError(message="User account is disabled")

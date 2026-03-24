@@ -1,4 +1,4 @@
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_crewai %}
+{%- if cookiecutter.use_crewai %}
 """CrewAI Multi-Agent implementation.
 
 A multi-agent orchestration framework using CrewAI.
@@ -38,8 +38,15 @@ from langchain_openai import ChatOpenAI
 {%- if cookiecutter.use_anthropic %}
 from langchain_anthropic import ChatAnthropic
 {%- endif %}
+{%- if cookiecutter.use_google %}
+from langchain_google_genai import ChatGoogleGenerativeAI
+{%- endif %}
 
 from app.agents.prompts import DEFAULT_SYSTEM_PROMPT
+{%- if cookiecutter.enable_rag %}
+from app.agents.prompts import get_system_prompt_with_rag
+from app.agents.tools.rag_tool import SearchKnowledgeBase
+{%- endif %}
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -208,6 +215,26 @@ class CrewEventQueueListener:
         ]
 
 
+{%- if cookiecutter.enable_rag %}
+def _search_knowledge_base_sync(query: str, collection: str = "documents", top_k: int = 5) -> str:
+    """Synchronous wrapper for RAG search tool.
+
+    This sync function is used by CrewAI agents since they run in a
+    synchronous context. Uses asyncio.run() to execute the async RAG search.
+
+    Args:
+        query: The search query string.
+        collection: Name of the collection to search (default: "documents").
+        top_k: Number of top results to retrieve (default: 5).
+
+    Returns:
+        Formatted string with search results.
+    """
+    from app.agents.tools.rag_tool import search_knowledge_base_sync
+    return search_knowledge_base_sync(query=query, collection=collection, top_k=top_k)
+
+
+{%- endif %}
 class CrewAIAssistant:
     """Multi-agent crew orchestration using CrewAI.
 
@@ -235,12 +262,23 @@ class CrewAIAssistant:
         self.config = config or self._default_config()
         self.model_name = model_name or settings.AI_MODEL
         self.temperature = temperature or settings.AI_TEMPERATURE
+{%- if cookiecutter.enable_rag %}
+        self.system_prompt = system_prompt or get_system_prompt_with_rag()
+{%- else %}
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+{%- endif %}
         self._crew: Crew | None = None
         self._agents: dict[str, Agent] = {}
 
     def _default_config(self) -> CrewConfig:
         """Default crew configuration for general assistance."""
+{%- if cookiecutter.enable_rag %}
+        research_tools = ["search_documents"]
+        task_description_suffix = " Use search_documents to find information from uploaded documents before answering, and cite sources by referring to the document filename."
+{%- else %}
+        research_tools = []
+        task_description_suffix = ""
+{%- endif %}
         return CrewConfig(
             name="assistant_crew",
             process="sequential",
@@ -250,7 +288,7 @@ class CrewAIAssistant:
                     role="Research Analyst",
                     goal="Gather and analyze information accurately to help the user",
                     backstory="You are an expert research analyst skilled at finding and synthesizing information. You always provide accurate, well-researched answers.",
-                    tools=[],
+                    tools=research_tools,
                     allow_delegation=False,  # Simpler without delegation
                 ),
                 AgentConfig(
@@ -263,7 +301,7 @@ class CrewAIAssistant:
             ],
             tasks=[
                 TaskConfig(
-                    description="Research and analyze the user's query: {user_input}. Gather all relevant information needed to provide a comprehensive answer.",
+                    description=f"Research and analyze the user's query: {{ "{{user_input}}" }}. Gather all relevant information needed to provide a comprehensive answer.{task_description_suffix}",
                     expected_output="Comprehensive research findings with key facts and insights",
                     agent_role="Research Analyst",
                 ),
@@ -292,18 +330,42 @@ class CrewAIAssistant:
             api_key=settings.ANTHROPIC_API_KEY,
         )
 {%- endif %}
+{%- if cookiecutter.use_google %}
+        return ChatGoogleGenerativeAI(
+            model=self.model_name,
+            temperature=self.temperature,
+            google_api_key=settings.GOOGLE_API_KEY,
+        )
+{%- endif %}
 
     def _build_agents(self) -> dict[str, Agent]:
         """Build Agent instances from config."""
         agents = {}
         llm = self._get_llm()
 
+        def get_tools_for_agent(agent_tools: list[str]) -> list:
+            """Get tool functions for an agent based on tool names."""
+            tool_map = {}
+{%- if cookiecutter.enable_rag %}
+            tool_map["search_documents"] = SearchKnowledgeBase()
+{%- endif %}
+{%- if cookiecutter.enable_web_search %}
+            from app.agents.tools.web_search import web_search_sync
+            from langchain_core.tools import tool as lc_tool
+            @lc_tool
+            def search_web(query: str) -> str:
+                """Search the web for current information."""
+                return web_search_sync(query=query)
+            tool_map["search_web"] = search_web
+{%- endif %}
+            return [tool_map[name] for name in agent_tools if name in tool_map]
+
         for agent_config in self.config.agents:
             agent = Agent(
                 role=agent_config.role,
                 goal=agent_config.goal,
                 backstory=agent_config.backstory,
-                tools=[],
+                tools=get_tools_for_agent(agent_config.tools),
                 allow_delegation=agent_config.allow_delegation,
                 verbose=agent_config.verbose,
                 llm=llm,
@@ -323,9 +385,7 @@ class CrewAIAssistant:
                 raise ValueError(f"Agent '{task_config.agent_role}' not found")
 
             context = [
-                task_by_agent[role]
-                for role in task_config.context_from
-                if role in task_by_agent
+                task_by_agent[role] for role in task_config.context_from if role in task_by_agent
             ]
 
             task = Task(

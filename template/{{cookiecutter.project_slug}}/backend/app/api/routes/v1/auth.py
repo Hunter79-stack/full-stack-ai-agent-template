@@ -1,7 +1,7 @@
 {%- if cookiecutter.use_jwt %}
 """Authentication routes."""
 
-from typing import Annotated
+from typing import Annotated, Any
 {%- if cookiecutter.use_postgresql and not cookiecutter.enable_session_management %}
 from uuid import UUID
 {%- endif %}
@@ -13,7 +13,7 @@ from app.api.deps import CurrentUser{% if cookiecutter.enable_session_management
 from app.core.exceptions import AuthenticationError
 from app.core.security import create_access_token, create_refresh_token, verify_token
 from app.schemas.token import RefreshTokenRequest, Token
-from app.schemas.user import UserCreate, UserRead
+from app.schemas.user import UserCreate, UserRead, UserRole
 
 router = APIRouter()
 
@@ -31,7 +31,7 @@ async def login(
 {%- if cookiecutter.enable_session_management %}
     session_service: SessionSvc,
 {%- endif %}
-):
+) -> Any:
     """OAuth2 compatible token login.
 
     Returns access token and refresh token.
@@ -57,7 +57,7 @@ async def login(
 async def register(
     user_in: UserCreate,
     user_service: UserSvc,
-):
+) -> Any:
     """Register a new user.
 
     Raises AlreadyExistsError if email is already registered.
@@ -76,7 +76,7 @@ async def refresh_token(
 {%- if cookiecutter.enable_session_management %}
     session_service: SessionSvc,
 {%- endif %}
-):
+) -> Any:
     """Get new access token using refresh token.
 
     Raises AuthenticationError if refresh token is invalid or expired.
@@ -126,11 +126,11 @@ async def refresh_token(
 {%- if cookiecutter.enable_session_management %}
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def logout(
     body: RefreshTokenRequest,
     session_service: SessionSvc,
-):
+) -> None:
     """Logout and invalidate the current session.
 
     Invalidates the refresh token, preventing further token refresh.
@@ -140,7 +140,7 @@ async def logout(
 
 
 @router.get("/me", response_model=UserRead)
-async def get_current_user_info(current_user: CurrentUser):
+async def get_current_user_info(current_user: CurrentUser) -> Any:
     """Get current authenticated user information."""
     return current_user
 {%- elif cookiecutter.use_mongodb %}
@@ -156,7 +156,7 @@ async def login(
 {%- if cookiecutter.enable_session_management %}
     session_service: SessionSvc,
 {%- endif %}
-):
+) -> Any:
     """OAuth2 compatible token login.
 
     Returns access token and refresh token.
@@ -182,13 +182,25 @@ async def login(
 async def register(
     user_in: UserCreate,
     user_service: UserSvc,
-):
+) -> Any:
     """Register a new user.
 
     Raises AlreadyExistsError if email is already registered.
     """
     user = await user_service.register(user_in)
-    return user
+    return UserRead(
+        id=str(user.id),
+        email=user.email,
+        full_name=user.full_name,
+        is_active=user.is_active,
+        role=UserRole(user.role),
+{%- if cookiecutter.enable_oauth %}
+        oauth_provider=user.oauth_provider,
+{%- endif %}
+        avatar_url=user.avatar_url,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+    )
 
 
 @router.post("/refresh", response_model=Token)
@@ -201,7 +213,7 @@ async def refresh_token(
 {%- if cookiecutter.enable_session_management %}
     session_service: SessionSvc,
 {%- endif %}
-):
+) -> Any:
     """Get new access token using refresh token.
 
     Raises AuthenticationError if refresh token is invalid or expired.
@@ -249,11 +261,11 @@ async def refresh_token(
 {%- if cookiecutter.enable_session_management %}
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def logout(
     body: RefreshTokenRequest,
     session_service: SessionSvc,
-):
+) -> None:
     """Logout and invalidate the current session.
 
     Invalidates the refresh token, preventing further token refresh.
@@ -263,9 +275,21 @@ async def logout(
 
 
 @router.get("/me", response_model=UserRead)
-async def get_current_user_info(current_user: CurrentUser):
+async def get_current_user_info(current_user: CurrentUser) -> Any:
     """Get current authenticated user information."""
-    return current_user
+    return UserRead(
+        id=str(current_user.id),
+        email=current_user.email,
+        full_name=current_user.full_name,
+        is_active=current_user.is_active,
+        role=UserRole(current_user.role),
+{%- if cookiecutter.enable_oauth %}
+        oauth_provider=current_user.oauth_provider,
+{%- endif %}
+        avatar_url=current_user.avatar_url,
+        created_at=current_user.created_at,
+        updated_at=current_user.updated_at,
+    )
 {%- elif cookiecutter.use_sqlite %}
 
 
@@ -279,7 +303,7 @@ def login(
 {%- if cookiecutter.enable_session_management %}
     session_service: SessionSvc,
 {%- endif %}
-):
+) -> Any:
     """OAuth2 compatible token login.
 
     Returns access token and refresh token.
@@ -305,13 +329,25 @@ def login(
 def register(
     user_in: UserCreate,
     user_service: UserSvc,
-):
+) -> Any:
     """Register a new user.
 
     Raises AlreadyExistsError if email is already registered.
     """
     user = user_service.register(user_in)
-    return user
+    return UserRead(
+        id=str(user.id),
+        email=user.email,
+        full_name=user.full_name,
+        is_active=user.is_active,
+        role=UserRole(user.role),
+{%- if cookiecutter.enable_oauth %}
+        oauth_provider=user.oauth_provider,
+{%- endif %}
+        avatar_url=user.avatar_url,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+    )
 
 
 @router.post("/refresh", response_model=Token)
@@ -324,7 +360,7 @@ def refresh_token(
 {%- if cookiecutter.enable_session_management %}
     session_service: SessionSvc,
 {%- endif %}
-):
+) -> Any:
     """Get new access token using refresh token.
 
     Raises AuthenticationError if refresh token is invalid or expired.
@@ -372,11 +408,11 @@ def refresh_token(
 {%- if cookiecutter.enable_session_management %}
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def logout(
     body: RefreshTokenRequest,
     session_service: SessionSvc,
-):
+) -> None:
     """Logout and invalidate the current session.
 
     Invalidates the refresh token, preventing further token refresh.
@@ -386,9 +422,21 @@ def logout(
 
 
 @router.get("/me", response_model=UserRead)
-def get_current_user_info(current_user: CurrentUser):
+def get_current_user_info(current_user: CurrentUser) -> Any:
     """Get current authenticated user information."""
-    return current_user
+    return UserRead(
+        id=str(current_user.id),
+        email=current_user.email,
+        full_name=current_user.full_name,
+        is_active=current_user.is_active,
+        role=UserRole(current_user.role),
+{%- if cookiecutter.enable_oauth %}
+        oauth_provider=current_user.oauth_provider,
+{%- endif %}
+        avatar_url=current_user.avatar_url,
+        created_at=current_user.created_at,
+        updated_at=current_user.updated_at,
+    )
 {%- endif %}
 {%- else %}
 """Auth routes - not configured."""

@@ -1,4 +1,3 @@
-{%- if cookiecutter.enable_i18n %}
 import createMiddleware from "next-intl/middleware";
 import { locales, defaultLocale } from "./i18n";
 
@@ -25,7 +24,3 @@ export const config = {
     "/((?!api|_next|_vercel|static|.*\\..*).*)",
   ],
 };
-{%- else %}
-// Middleware is disabled when i18n is not enabled
-export {};
-{%- endif %}

@@ -9,7 +9,6 @@ import sys
 # Get cookiecutter variables
 use_frontend = "{{ cookiecutter.use_frontend }}" == "True"
 generate_env = "{{ cookiecutter.generate_env }}" == "True"
-enable_i18n = "{{ cookiecutter.enable_i18n }}" == "True"
 
 # Feature flags
 use_database = "{{ cookiecutter.use_database }}" == "True"
@@ -18,8 +17,6 @@ use_sqlite = "{{ cookiecutter.use_sqlite }}" == "True"
 use_mongodb = "{{ cookiecutter.use_mongodb }}" == "True"
 use_sqlalchemy = "{{ cookiecutter.use_sqlalchemy }}" == "True"
 use_sqlmodel = "{{ cookiecutter.use_sqlmodel }}" == "True"
-include_example_crud = "{{ cookiecutter.include_example_crud }}" == "True"
-enable_ai_agent = "{{ cookiecutter.enable_ai_agent }}" == "True"
 use_pydantic_ai = "{{ cookiecutter.use_pydantic_ai }}" == "True"
 use_langchain = "{{ cookiecutter.use_langchain }}" == "True"
 use_langgraph = "{{ cookiecutter.use_langgraph }}" == "True"
@@ -31,11 +28,8 @@ enable_redis = "{{ cookiecutter.enable_redis }}" == "True"
 enable_caching = "{{ cookiecutter.enable_caching }}" == "True"
 enable_rate_limiting = "{{ cookiecutter.enable_rate_limiting }}" == "True"
 enable_session_management = "{{ cookiecutter.enable_session_management }}" == "True"
-enable_conversation_persistence = "{{ cookiecutter.enable_conversation_persistence }}" == "True"
 enable_webhooks = "{{ cookiecutter.enable_webhooks }}" == "True"
 enable_oauth = "{{ cookiecutter.enable_oauth }}" == "True"
-use_jwt = "{{ cookiecutter.use_jwt }}" == "True"
-use_api_key = "{{ cookiecutter.use_api_key }}" == "True"
 use_celery = "{{ cookiecutter.use_celery }}" == "True"
 use_taskiq = "{{ cookiecutter.use_taskiq }}" == "True"
 use_arq = "{{ cookiecutter.use_arq }}" == "True"
@@ -45,6 +39,11 @@ enable_kubernetes = "{{ cookiecutter.enable_kubernetes }}" == "True"
 use_nginx = "{{ cookiecutter.use_nginx }}" == "True"
 enable_logfire = "{{ cookiecutter.enable_logfire }}" == "True"
 enable_langsmith = "{{ cookiecutter.enable_langsmith }}" == "True"
+enable_rag = "{{ cookiecutter.enable_rag }}" == "True"
+enable_rag_image_description = "{{ cookiecutter.enable_rag_image_description }}" == "True"
+enable_google_drive_ingestion = "{{ cookiecutter.enable_google_drive_ingestion }}" == "True"
+enable_s3_ingestion = "{{ cookiecutter.enable_s3_ingestion }}" == "True"
+enable_web_search = "{{ cookiecutter.enable_web_search }}" == "True"
 
 
 def remove_file(path: str) -> None:
@@ -86,54 +85,19 @@ backend_app = os.path.join(os.getcwd(), "backend", "app")
 # ============================================================================
 print("Cleaning up unused files...")
 
-# --- AI Agent files ---
-if not enable_ai_agent:
-    # Remove entire agents directory when AI is disabled
-    remove_dir(os.path.join(backend_app, "agents"))
-    remove_file(os.path.join(backend_app, "api", "routes", "v1", "agent.py"))
-
-    # Remove frontend chat files when AI is disabled
-    if use_frontend:
-        frontend_src = os.path.join(os.getcwd(), "frontend", "src")
-        remove_dir(os.path.join(frontend_src, "components", "chat"))
-        remove_file(os.path.join(frontend_src, "hooks", "use-chat.ts"))
-        remove_file(os.path.join(frontend_src, "hooks", "use-local-chat.ts"))
-        remove_file(os.path.join(frontend_src, "hooks", "use-websocket.ts"))
-        remove_file(os.path.join(frontend_src, "types", "chat.ts"))
-        remove_file(os.path.join(frontend_src, "stores", "chat-store.ts"))
-        remove_file(os.path.join(frontend_src, "stores", "local-chat-store.ts"))
-        remove_file(os.path.join(frontend_src, "stores", "chat-sidebar-store.ts"))
-        # Remove chat page route (both paths - i18n variant may be moved later)
-        remove_dir(os.path.join(frontend_src, "app", "[locale]", "(dashboard)", "chat"))
-        remove_dir(os.path.join(frontend_src, "app", "(dashboard)", "chat"))
-else:
-    # Remove framework-specific files based on selection
-    if not use_pydantic_ai:
-        remove_file(os.path.join(backend_app, "agents", "assistant.py"))
-    if not use_langchain:
-        remove_file(os.path.join(backend_app, "agents", "langchain_assistant.py"))
-    if not use_langgraph:
-        remove_file(os.path.join(backend_app, "agents", "langgraph_assistant.py"))
-    if not use_crewai:
-        remove_file(os.path.join(backend_app, "agents", "crewai_assistant.py"))
-    if not use_deepagents:
-        remove_file(os.path.join(backend_app, "agents", "deepagents_assistant.py"))
-
-# --- Example CRUD files ---
-if not include_example_crud or not use_database:
-    remove_file(os.path.join(backend_app, "api", "routes", "v1", "items.py"))
-    remove_file(os.path.join(backend_app, "db", "models", "item.py"))
-    remove_file(os.path.join(backend_app, "repositories", "item.py"))
-    remove_file(os.path.join(backend_app, "services", "item.py"))
-    remove_file(os.path.join(backend_app, "schemas", "item.py"))
-
-# --- Conversation persistence files ---
-if not enable_conversation_persistence:
-    remove_file(os.path.join(backend_app, "api", "routes", "v1", "conversations.py"))
-    remove_file(os.path.join(backend_app, "db", "models", "conversation.py"))
-    remove_file(os.path.join(backend_app, "repositories", "conversation.py"))
-    remove_file(os.path.join(backend_app, "services", "conversation.py"))
-    remove_file(os.path.join(backend_app, "schemas", "conversation.py"))
+# --- AI Agent files (remove unused framework-specific files) ---
+if not use_pydantic_ai:
+    remove_file(os.path.join(backend_app, "agents", "assistant.py"))
+if not use_langchain:
+    remove_file(os.path.join(backend_app, "agents", "langchain_assistant.py"))
+if not use_langgraph:
+    remove_file(os.path.join(backend_app, "agents", "langgraph_assistant.py"))
+if not use_crewai:
+    remove_file(os.path.join(backend_app, "agents", "crewai_assistant.py"))
+if not use_deepagents:
+    remove_file(os.path.join(backend_app, "agents", "deepagents_assistant.py"))
+if not enable_web_search:
+    remove_file(os.path.join(backend_app, "agents", "tools", "web_search.py"))
 
 # --- Webhook files ---
 if not enable_webhooks or not use_database:
@@ -144,16 +108,13 @@ if not enable_webhooks or not use_database:
     remove_file(os.path.join(backend_app, "schemas", "webhook.py"))
 
 # --- Session management files ---
-if not enable_session_management or not use_jwt:
+if not enable_session_management:
     remove_file(os.path.join(backend_app, "api", "routes", "v1", "sessions.py"))
     remove_file(os.path.join(backend_app, "db", "models", "session.py"))
     remove_file(os.path.join(backend_app, "repositories", "session.py"))
     remove_file(os.path.join(backend_app, "services", "session.py"))
     remove_file(os.path.join(backend_app, "schemas", "session.py"))
 
-# --- WebSocket files ---
-if not enable_websockets:
-    remove_file(os.path.join(backend_app, "api", "routes", "v1", "ws.py"))
 
 # --- Admin panel (requires SQLAlchemy, not SQLModel) ---
 if not enable_admin_panel or (not use_postgresql and not use_sqlite) or not use_sqlalchemy:
@@ -175,23 +136,46 @@ if not enable_oauth:
     remove_file(os.path.join(backend_app, "api", "routes", "v1", "oauth.py"))
     remove_file(os.path.join(backend_app, "core", "oauth.py"))
 
-# --- Security file (only when no auth at all) ---
-if not use_jwt and not use_api_key:
-    remove_file(os.path.join(backend_app, "core", "security.py"))
-
-# --- Auth/User files (when JWT is disabled) ---
-if not use_jwt:
-    remove_file(os.path.join(backend_app, "api", "routes", "v1", "auth.py"))
-    remove_file(os.path.join(backend_app, "api", "routes", "v1", "users.py"))
-    remove_file(os.path.join(backend_app, "db", "models", "user.py"))
-    remove_file(os.path.join(backend_app, "repositories", "user.py"))
-    remove_file(os.path.join(backend_app, "services", "user.py"))
-    remove_file(os.path.join(backend_app, "schemas", "user.py"))
-    remove_file(os.path.join(backend_app, "schemas", "token.py"))
 
 # --- Logfire setup file (when logfire is disabled) ---
 if not enable_logfire:
     remove_file(os.path.join(backend_app, "core", "logfire_setup.py"))
+
+# --- RAG files ---
+if not enable_rag:
+    # Remove entire rag directory when RAG is disabled
+    remove_dir(os.path.join(backend_app, "rag"))
+    # Remove RAG-related API route
+    remove_file(os.path.join(backend_app, "api", "routes", "v1", "rag.py"))
+    # Remove RAG schema
+    remove_file(os.path.join(backend_app, "schemas", "rag.py"))
+    # Remove RAG commands
+    remove_file(os.path.join(backend_app, "commands", "rag.py"))
+    # Remove RAG worker tasks
+    remove_file(os.path.join(backend_app, "worker", "tasks", "rag_ingestion.py"))
+    # Remove RAG agent tool
+    remove_file(os.path.join(backend_app, "agents", "tools", "rag_tool.py"))
+    # Remove frontend RAG files
+    if use_frontend:
+        frontend_src = os.path.join(os.getcwd(), "frontend", "src")
+        remove_file(os.path.join(frontend_src, "lib", "rag-api.ts"))
+        remove_dir(os.path.join(frontend_src, "app", "api", "v1", "rag"))
+        # Remove RAG management page (both paths - i18n variant may be moved later)
+        remove_dir(os.path.join(frontend_src, "app", "[locale]", "(dashboard)", "rag"))
+        remove_dir(os.path.join(frontend_src, "app", "(dashboard)", "rag"))
+else:
+    # RAG enabled — remove optional components if not enabled
+    if not enable_rag_image_description:
+        remove_file(os.path.join(backend_app, "rag", "image_describer.py"))
+    if not enable_google_drive_ingestion:
+        remove_file(os.path.join(backend_app, "rag", "sources", "google_drive.py"))
+        remove_file(os.path.join(backend_app, "rag", "connectors", "google_drive.py"))
+    if not enable_s3_ingestion:
+        remove_file(os.path.join(backend_app, "rag", "sources", "s3.py"))
+        remove_file(os.path.join(backend_app, "rag", "connectors", "s3.py"))
+    if not enable_google_drive_ingestion and not enable_s3_ingestion:
+        remove_dir(os.path.join(backend_app, "rag", "sources"))
+        remove_dir(os.path.join(backend_app, "rag", "connectors"))
 
 # --- Cleanup stub files (files with only docstring, no code) ---
 core_dir = os.path.join(backend_app, "core")
@@ -211,10 +195,10 @@ else:
     if not use_celery:
         remove_file(os.path.join(worker_dir, "celery_app.py"))
         remove_file(os.path.join(worker_dir, "tasks", "examples.py"))
-        remove_file(os.path.join(worker_dir, "tasks", "schedules.py"))
     if not use_taskiq:
         remove_file(os.path.join(worker_dir, "taskiq_app.py"))
         remove_file(os.path.join(worker_dir, "tasks", "taskiq_examples.py"))
+        remove_file(os.path.join(worker_dir, "tasks", "schedules.py"))
     if not use_arq:
         remove_file(os.path.join(worker_dir, "arq_app.py"))
 
@@ -280,69 +264,6 @@ if not use_frontend:
         shutil.rmtree(frontend_dir)
         print("Removed frontend/ directory (frontend not enabled)")
 
-# Handle i18n disabled: move files from [locale]/ to app root
-if use_frontend and not enable_i18n:
-    app_dir = os.path.join(os.getcwd(), "frontend", "src", "app")
-    locale_dir = os.path.join(app_dir, "[locale]")
-
-    if os.path.exists(locale_dir):
-        # Move all contents from [locale]/ to app/
-        for item in os.listdir(locale_dir):
-            src = os.path.join(locale_dir, item)
-            dst = os.path.join(app_dir, item)
-            # Skip the layout.tsx from [locale] - we'll use the root layout
-            if item == "layout.tsx":
-                continue
-            if os.path.exists(dst):
-                if os.path.isdir(dst):
-                    shutil.rmtree(dst)
-                else:
-                    os.remove(dst)
-            shutil.move(src, dst)
-
-        # Remove the now-empty [locale] directory
-        shutil.rmtree(locale_dir)
-        print("Moved routes from [locale]/ to app/ (i18n not enabled)")
-
-        # Update root layout to include providers
-        root_layout = os.path.join(app_dir, "layout.tsx")
-        if os.path.exists(root_layout):
-            with open(root_layout) as f:
-                content = f.read()
-            # Add Providers import and wrap children
-            content = content.replace(
-                'import "./globals.css";',
-                'import "./globals.css";\nimport { Providers } from "./providers";',
-            )
-            content = content.replace(
-                "<body className={inter.className}>{children}</body>",
-                "<body className={inter.className}>\n        <Providers>{children}</Providers>\n      </body>",
-            )
-            with open(root_layout, "w") as f:
-                f.write(content)
-
-    # Remove middleware.ts
-    middleware_file = os.path.join(os.getcwd(), "frontend", "src", "middleware.ts")
-    if os.path.exists(middleware_file):
-        os.remove(middleware_file)
-
-    # Remove i18n related files
-    i18n_file = os.path.join(os.getcwd(), "frontend", "src", "i18n.ts")
-    if os.path.exists(i18n_file):
-        os.remove(i18n_file)
-
-    messages_dir = os.path.join(os.getcwd(), "frontend", "messages")
-    if os.path.exists(messages_dir):
-        shutil.rmtree(messages_dir)
-
-    # Remove language-switcher component
-    lang_switcher = os.path.join(
-        os.getcwd(), "frontend", "src", "components", "language-switcher.tsx"
-    )
-    if os.path.exists(lang_switcher):
-        os.remove(lang_switcher)
-
-    print("Removed i18n files (i18n not enabled)")
 
 # Remove .env files if generate_env is false
 if not generate_env:
@@ -355,6 +276,47 @@ if not generate_env:
     if os.path.exists(frontend_env):
         os.remove(frontend_env)
         print("Removed frontend/.env.local (generate_env disabled)")
+else:
+    # Generate frontend/.env.local with necessary Next.js public variables
+    if use_frontend:
+        frontend_env_local = os.path.join(os.getcwd(), "frontend", ".env.local")
+        if not os.path.exists(frontend_env_local):
+            env_lines = [
+                "# Backend API URL (server-side only - not exposed to browser)",
+                "BACKEND_URL=http://localhost:{{ cookiecutter.backend_port }}",
+                "",
+                "# WebSocket URL for real-time features",
+                "BACKEND_WS_URL=ws://localhost:{{ cookiecutter.backend_port }}",
+            ]
+            env_lines.extend([
+                "",
+                "# Authentication (always enabled)",
+                "NEXT_PUBLIC_AUTH_ENABLED=true",
+            ])
+            if enable_oauth:
+                env_lines.extend([
+                    "",
+                    "# Public API URL for OAuth redirects (exposed to browser)",
+                    "NEXT_PUBLIC_API_URL=http://localhost:{{ cookiecutter.backend_port }}",
+                ])
+            if enable_rag:
+                env_lines.extend([
+                    "",
+                    "# RAG (Retrieval Augmented Generation)",
+                    "NEXT_PUBLIC_RAG_ENABLED=true",
+                ])
+            if enable_logfire:
+                env_lines.extend([
+                    "",
+                    "# Logfire/OpenTelemetry (server-side instrumentation)",
+                    "# Get your write token from: https://logfire.pydantic.dev",
+                    "OTEL_EXPORTER_OTLP_ENDPOINT=https://logfire-api.pydantic.dev",
+                    "OTEL_EXPORTER_OTLP_HEADERS=Authorization=your-logfire-write-token",
+                ])
+
+            with open(frontend_env_local, "w") as f:
+                f.write("\n".join(env_lines) + "\n")
+            print("Generated frontend/.env.local")
 
 # Generate uv.lock for backend (required for Docker builds)
 backend_dir = os.path.join(os.getcwd(), "backend")
@@ -400,15 +362,17 @@ if os.path.exists(backend_dir):
 
     if ruff_cmd:
         print(f"Running ruff to format code (using: {' '.join(ruff_cmd)})...")
-        # Run ruff check --fix to auto-fix issues
+        # Run ruff check --fix to auto-fix issues (suppress output)
         subprocess.run(
             [*ruff_cmd, "check", "--fix", "--quiet", backend_dir],
             check=False,
+            capture_output=True,
         )
-        # Run ruff format for consistent formatting
+        # Run ruff format for consistent formatting (suppress output)
         subprocess.run(
             [*ruff_cmd, "format", "--quiet", backend_dir],
             check=False,
+            capture_output=True,
         )
         print("Code formatting complete.")
     else:

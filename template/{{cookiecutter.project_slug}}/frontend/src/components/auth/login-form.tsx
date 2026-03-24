@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks";
 import { Button, Input, Label, Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui";
 import { ApiError } from "@/lib/api-client";
@@ -9,6 +10,8 @@ import { ROUTES } from "@/lib/constants";
 {%- if cookiecutter.enable_oauth_google %}
 import { GoogleIcon } from "@/components/icons/google-icon";
 {%- endif %}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function LoginForm() {
   const { login } = useAuth();
@@ -19,6 +22,9 @@ export function LoginForm() {
 {%- if cookiecutter.enable_oauth_google %}
   const [isOAuthLoading, setIsOAuthLoading] = useState(false);
 {%- endif %}
+  const [emailTouched, setEmailTouched] = useState(false);
+
+  const emailValid = !email || EMAIL_RE.test(email);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,12 +33,11 @@ export function LoginForm() {
 
     try {
       await login({ email, password });
+      toast.success("Logged in successfully");
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError("Login failed. Please try again.");
-      }
+      const message = err instanceof ApiError ? err.message : "Login failed. Please try again.";
+      setError(message);
+      toast.error(message);
       setIsLoading(false);
     }
   };
@@ -61,9 +66,14 @@ export function LoginForm() {
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onBlur={() => setEmailTouched(true)}
               required
               disabled={isLoading}
+              className={emailTouched && email && !emailValid ? "border-destructive" : ""}
             />
+            {emailTouched && email && !emailValid && (
+              <p className="text-destructive text-xs">Please enter a valid email address</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>

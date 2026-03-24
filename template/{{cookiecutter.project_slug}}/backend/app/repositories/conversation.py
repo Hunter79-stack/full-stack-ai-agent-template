@@ -1,10 +1,11 @@
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_postgresql %}
+{%- if cookiecutter.use_postgresql %}
 """Conversation repository (PostgreSQL async).
 
 Contains database operations for Conversation, Message, and ToolCall entities.
 """
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select, update as sql_update
@@ -14,9 +15,7 @@ from sqlalchemy.orm import selectinload
 from app.db.models.conversation import Conversation, Message, ToolCall
 
 
-# =============================================================================
 # Conversation Operations
-# =============================================================================
 
 
 async def get_conversation_by_id(
@@ -55,7 +54,7 @@ async def get_conversations_by_user(
 {%- endif %}
     if not include_archived:
         query = query.where(Conversation.is_archived == False)  # noqa: E712
-    query = query.order_by(Conversation.updated_at.desc()).offset(skip).limit(limit)
+    query = query.order_by(func.coalesce(Conversation.updated_at, Conversation.created_at).desc()).offset(skip).limit(limit)
     result = await db.execute(query)
     return list(result.scalars().all())
 
@@ -105,7 +104,7 @@ async def update_conversation(
     db: AsyncSession,
     *,
     db_conversation: Conversation,
-    update_data: dict,
+    update_data: dict[str, Any],
 ) -> Conversation:
     """Update a conversation."""
     for field, value in update_data.items():
@@ -141,9 +140,7 @@ async def delete_conversation(db: AsyncSession, conversation_id: UUID) -> bool:
     return False
 
 
-# =============================================================================
 # Message Operations
-# =============================================================================
 
 
 async def get_message_by_id(db: AsyncSession, message_id: UUID) -> Message | None:
@@ -216,9 +213,7 @@ async def delete_message(db: AsyncSession, message_id: UUID) -> bool:
     return False
 
 
-# =============================================================================
 # ToolCall Operations
-# =============================================================================
 
 
 async def get_tool_call_by_id(db: AsyncSession, tool_call_id: UUID) -> ToolCall | None:
@@ -246,7 +241,7 @@ async def create_tool_call(
     message_id: UUID,
     tool_call_id: str,
     tool_name: str,
-    args: dict,
+    args: dict[str, Any],
     started_at: datetime,
 ) -> ToolCall:
     """Create a new tool call record."""
@@ -288,13 +283,14 @@ async def complete_tool_call(
     return db_tool_call
 
 
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_sqlite %}
+{%- elif cookiecutter.use_sqlite %}
 """Conversation repository (SQLite sync).
 
 Contains database operations for Conversation, Message, and ToolCall entities.
 """
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import func, select, update as sql_update
 from sqlalchemy.orm import Session, selectinload
@@ -302,9 +298,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.db.models.conversation import Conversation, Message, ToolCall
 
 
-# =============================================================================
 # Conversation Operations
-# =============================================================================
 
 
 def get_conversation_by_id(
@@ -343,7 +337,7 @@ def get_conversations_by_user(
 {%- endif %}
     if not include_archived:
         query = query.where(Conversation.is_archived == False)  # noqa: E712
-    query = query.order_by(Conversation.updated_at.desc()).offset(skip).limit(limit)
+    query = query.order_by(func.coalesce(Conversation.updated_at, Conversation.created_at).desc()).offset(skip).limit(limit)
     result = db.execute(query)
     return list(result.scalars().all())
 
@@ -393,7 +387,7 @@ def update_conversation(
     db: Session,
     *,
     db_conversation: Conversation,
-    update_data: dict,
+    update_data: dict[str, Any],
 ) -> Conversation:
     """Update a conversation."""
     for field, value in update_data.items():
@@ -429,9 +423,7 @@ def delete_conversation(db: Session, conversation_id: str) -> bool:
     return False
 
 
-# =============================================================================
 # Message Operations
-# =============================================================================
 
 
 def get_message_by_id(db: Session, message_id: str) -> Message | None:
@@ -504,9 +496,7 @@ def delete_message(db: Session, message_id: str) -> bool:
     return False
 
 
-# =============================================================================
 # ToolCall Operations
-# =============================================================================
 
 
 def get_tool_call_by_id(db: Session, tool_call_id: str) -> ToolCall | None:
@@ -534,7 +524,7 @@ def create_tool_call(
     message_id: str,
     tool_call_id: str,
     tool_name: str,
-    args: dict,
+    args: dict[str, Any],
     started_at: datetime,
 ) -> ToolCall:
     """Create a new tool call record."""
@@ -552,6 +542,19 @@ def create_tool_call(
     db.flush()
     db.refresh(tool_call)
     return tool_call
+
+
+def deserialize_tool_call_args(tool_call: ToolCall) -> dict[str, Any]:
+    """Deserialize tool call args from JSON string (SQLite stores as TEXT)."""
+    import json
+
+    if isinstance(tool_call.args, str):
+        try:
+            result: dict[str, Any] = json.loads(tool_call.args)
+            return result
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    return dict(tool_call.args) if isinstance(tool_call.args, dict) else {}
 
 
 def complete_tool_call(
@@ -578,20 +581,19 @@ def complete_tool_call(
     return db_tool_call
 
 
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+{%- elif cookiecutter.use_mongodb %}
 """Conversation repository (MongoDB).
 
 Contains database operations for Conversation, Message, and ToolCall entities.
 """
 
 from datetime import UTC, datetime
+from typing import Any
 
 from app.db.models.conversation import Conversation, Message, ToolCall
 
 
-# =============================================================================
 # Conversation Operations
-# =============================================================================
 
 
 async def get_conversation_by_id(
@@ -666,7 +668,7 @@ async def create_conversation(
 async def update_conversation(
     *,
     db_conversation: Conversation,
-    update_data: dict,
+    update_data: dict[str, Any],
 ) -> Conversation:
     """Update a conversation."""
     for field, value in update_data.items():
@@ -702,9 +704,7 @@ async def delete_conversation(conversation_id: str) -> bool:
     return False
 
 
-# =============================================================================
 # Message Operations
-# =============================================================================
 
 
 async def get_message_by_id(message_id: str) -> Message | None:
@@ -770,9 +770,7 @@ async def delete_message(message_id: str) -> bool:
     return False
 
 
-# =============================================================================
 # ToolCall Operations
-# =============================================================================
 
 
 async def get_tool_call_by_id(tool_call_id: str) -> ToolCall | None:
@@ -796,7 +794,7 @@ async def create_tool_call(
     message_id: str,
     tool_call_id: str,
     tool_name: str,
-    args: dict,
+    args: dict[str, Any],
     started_at: datetime,
 ) -> ToolCall:
     """Create a new tool call record."""

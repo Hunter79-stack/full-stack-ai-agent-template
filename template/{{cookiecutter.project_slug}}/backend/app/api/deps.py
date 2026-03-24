@@ -48,7 +48,7 @@ from app.clients.redis import RedisClient
 
 async def get_redis(request: Request) -> RedisClient:
     """Get Redis client from lifespan state."""
-    return request.state.redis
+    return request.state.redis  # type: ignore[no-any-return]
 
 
 Redis = Annotated[RedisClient, Depends(get_redis)]
@@ -67,10 +67,7 @@ from app.services.session import SessionService
 {%- if cookiecutter.enable_webhooks and cookiecutter.use_database %}
 from app.services.webhook import WebhookService
 {%- endif %}
-{%- if cookiecutter.include_example_crud and cookiecutter.use_database %}
-from app.services.item import ItemService
-{%- endif %}
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 from app.services.conversation import ConversationService
 {%- endif %}
 {%- if cookiecutter.use_jwt %}
@@ -130,26 +127,8 @@ def get_webhook_service() -> WebhookService:
 WebhookSvc = Annotated[WebhookService, Depends(get_webhook_service)]
 {%- endif %}
 
-{%- if cookiecutter.include_example_crud and cookiecutter.use_database %}
-{%- if cookiecutter.use_postgresql or cookiecutter.use_sqlite %}
 
-
-def get_item_service(db: DBSession) -> ItemService:
-    """Create ItemService instance with database session."""
-    return ItemService(db)
-{%- elif cookiecutter.use_mongodb %}
-
-
-def get_item_service() -> ItemService:
-    """Create ItemService instance."""
-    return ItemService()
-{%- endif %}
-
-
-ItemSvc = Annotated[ItemService, Depends(get_item_service)]
-{%- endif %}
-
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 {%- if cookiecutter.use_postgresql or cookiecutter.use_sqlite %}
 
 
@@ -166,6 +145,44 @@ def get_conversation_service() -> ConversationService:
 
 
 ConversationSvc = Annotated[ConversationService, Depends(get_conversation_service)]
+{%- endif %}
+
+{%- if cookiecutter.enable_rag and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+from app.services.rag_document import RAGDocumentService
+from app.services.rag_sync import RAGSyncService
+from app.services.sync_source import SyncSourceService
+
+
+def get_rag_document_service(db: DBSession) -> RAGDocumentService:
+    """Create RAGDocumentService instance with database session."""
+    return RAGDocumentService(db)
+
+
+def get_rag_sync_service(db: DBSession) -> RAGSyncService:
+    """Create RAGSyncService instance with database session."""
+    return RAGSyncService(db)
+
+
+def get_sync_source_service(db: DBSession) -> SyncSourceService:
+    """Create SyncSourceService instance with database session."""
+    return SyncSourceService(db)
+
+
+RAGDocumentSvc = Annotated[RAGDocumentService, Depends(get_rag_document_service)]
+RAGSyncSvc = Annotated[RAGSyncService, Depends(get_rag_sync_service)]
+SyncSourceSvc = Annotated[SyncSourceService, Depends(get_sync_source_service)]
+{%- endif %}
+
+{%- if cookiecutter.use_jwt and (cookiecutter.use_postgresql or cookiecutter.use_sqlite) %}
+from app.services.file_upload import FileUploadService
+
+
+def get_file_upload_service(db: DBSession) -> FileUploadService:
+    """Create FileUploadService instance with database session."""
+    return FileUploadService(db)
+
+
+FileUploadSvc = Annotated[FileUploadService, Depends(get_file_upload_service)]
 {%- endif %}
 
 {%- if cookiecutter.use_jwt %}
@@ -260,8 +277,8 @@ async def get_current_active_superuser(
     Raises:
         AuthorizationError: If user is not a superuser.
     """
-    if not current_user.is_superuser:
-        raise AuthorizationError(message="Superuser privileges required")
+    if not current_user.has_role(UserRole.ADMIN):
+        raise AuthorizationError(message="Admin privileges required")
     return current_user
 {%- elif cookiecutter.use_sqlite %}
 
@@ -344,8 +361,8 @@ def get_current_active_superuser(
     Raises:
         AuthorizationError: If user is not a superuser.
     """
-    if not current_user.is_superuser:
-        raise AuthorizationError(message="Superuser privileges required")
+    if not current_user.has_role(UserRole.ADMIN):
+        raise AuthorizationError(message="Admin privileges required")
     return current_user
 {%- elif cookiecutter.use_mongodb %}
 
@@ -428,8 +445,8 @@ async def get_current_active_superuser(
     Raises:
         AuthorizationError: If user is not a superuser.
     """
-    if not current_user.is_superuser:
-        raise AuthorizationError(message="Superuser privileges required")
+    if not current_user.has_role(UserRole.ADMIN):
+        raise AuthorizationError(message="Admin privileges required")
     return current_user
 {%- endif %}
 
@@ -493,10 +510,12 @@ async def get_current_user_ws(
 
     db = await get_db_session()
     user_service = UserService(db)
-    user = await user_service.get_by_id(UUID(user_id))
+    user = await user_service.get_by_id(user_id)
 {%- elif cookiecutter.use_sqlite %}
 
-    with get_db_session() as db:
+    from contextlib import contextmanager
+
+    with contextmanager(get_db_session)() as db:
         user_service = UserService(db)
         user = user_service.get_by_id(user_id)
 {%- endif %}
@@ -538,4 +557,98 @@ async def verify_api_key(
 
 
 ValidAPIKey = Annotated[str, Depends(verify_api_key)]
+{%- endif %}
+
+{%- if cookiecutter.enable_rag %}
+
+# === RAG Service Dependencies ===
+
+from app.rag.embeddings import EmbeddingService
+from app.rag.ingestion import IngestionService
+from app.rag.documents import DocumentProcessor
+from fastapi import Request
+from app.core.config import settings
+from app.rag.retrieval import RetrievalService
+{%- if cookiecutter.use_milvus %}
+from app.rag.vectorstore import MilvusVectorStore
+{%- elif cookiecutter.use_qdrant %}
+from app.rag.vectorstore import QdrantVectorStore
+{%- elif cookiecutter.use_chromadb %}
+from app.rag.vectorstore import ChromaVectorStore
+{%- elif cookiecutter.use_pgvector %}
+from app.rag.vectorstore import PgVectorStore
+{%- endif %}
+
+def get_embedding_service(request: Request) -> EmbeddingService:
+    """Get embedding service from lifespan state or create new if not available."""
+    if request and hasattr(request.state, "embedding_service"):
+        return request.state.embedding_service  # type: ignore[no-any-return]
+    return EmbeddingService(settings=settings.rag)
+
+# Type Alias for the Embedder
+EmbeddingSvc = Annotated[EmbeddingService, Depends(get_embedding_service)]
+
+from app.rag.vectorstore import BaseVectorStore
+
+def get_vectorstore(request: Request, embedder: EmbeddingSvc) -> BaseVectorStore:
+    """Get vector store client from lifespan state or create new."""
+    if request and hasattr(request.state, "vector_store"):
+        return request.state.vector_store  # type: ignore[no-any-return]
+{%- if cookiecutter.use_milvus %}
+    return MilvusVectorStore(settings=settings.rag, embedding_service=embedder)
+{%- elif cookiecutter.use_qdrant %}
+    return QdrantVectorStore(settings=settings.rag, embedding_service=embedder)
+{%- elif cookiecutter.use_chromadb %}
+    return ChromaVectorStore(settings=settings.rag, embedding_service=embedder)
+{%- elif cookiecutter.use_pgvector %}
+    return PgVectorStore(settings=settings.rag, embedding_service=embedder)
+{%- endif %}
+
+VectorStoreSvc = Annotated[BaseVectorStore, Depends(get_vectorstore)]
+
+def get_retrieval_service(vector_store: VectorStoreSvc) -> RetrievalService:
+    """Create RetrievalService instance."""
+    {%- if cookiecutter.enable_reranker %}
+    from app.rag.reranker import RerankService
+    rerank_service = RerankService(settings=settings.rag)
+    return RetrievalService(
+        vector_store=vector_store,
+        settings=settings.rag,
+        rerank_service=rerank_service,
+    )
+    {%- else %}
+    return RetrievalService(vector_store=vector_store, settings=settings.rag)
+    {%- endif %}
+
+RetrievalSvc = Annotated[RetrievalService, Depends(get_retrieval_service)]
+
+def get_document_processor() -> DocumentProcessor:
+    """Create DocumentProcessor instance."""
+    return DocumentProcessor(settings=settings.rag)
+
+DocumentProcessorSvc = Annotated[DocumentProcessor, Depends(get_document_processor)]
+
+def get_ingestion_service(
+    processor: DocumentProcessorSvc,
+    vector_store: VectorStoreSvc,
+{%- if cookiecutter.enable_webhooks and cookiecutter.use_database %}
+    request: Request,
+{%- endif %}
+) -> IngestionService:
+    """Create IngestionService instance."""
+{%- if cookiecutter.enable_webhooks and cookiecutter.use_database %}
+    # Wire webhook dispatch for RAG events
+    async def on_rag_event(event: str, data: dict):
+        from app.services.webhook import WebhookService
+        db = request.state.db if hasattr(request.state, "db") else None
+        if db:
+            webhook_service = WebhookService(db)
+            await webhook_service.dispatch_event(event, data)
+
+    return IngestionService(processor=processor, vector_store=vector_store, on_event=on_rag_event)
+{%- else %}
+    return IngestionService(processor=processor, vector_store=vector_store)
+{%- endif %}
+
+IngestionSvc = Annotated[IngestionService, Depends(get_ingestion_service)]
 {%- endif %}

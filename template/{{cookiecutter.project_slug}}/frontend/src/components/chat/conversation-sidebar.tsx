@@ -1,9 +1,9 @@
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 "use client";
 
 import { useEffect, useState } from "react";
 import { useConversations } from "@/hooks";
-import { Button } from "@/components/ui";
+import { Button, Skeleton } from "@/components/ui";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useChatSidebarStore } from "@/stores";
@@ -47,9 +47,7 @@ function ConversationItem({
     setIsEditing(false);
   };
 
-  const displayTitle =
-    conversation.title ||
-    `Chat ${new Date(conversation.created_at).toLocaleDateString()}`;
+  const displayTitle = conversation.title || "New conversation";
 
   return (
     <div
@@ -77,7 +75,12 @@ function ConversationItem({
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        <span className="flex-1 truncate">{displayTitle}</span>
+        <div className="min-w-0 flex-1">
+          <span className="block truncate">{displayTitle}</span>
+          <span className="text-muted-foreground block truncate text-[10px]">
+            {new Date(conversation.updated_at || conversation.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+          </span>
+        </div>
       )}
 
       <div className="relative">
@@ -154,6 +157,7 @@ interface ConversationListProps {
   onRename: (id: string, title: string) => void;
   onNewChat: () => void;
   onNavigate?: () => void;
+  onLoadMore?: () => void;
 }
 
 function ConversationList({
@@ -166,6 +170,7 @@ function ConversationList({
   onRename,
   onNewChat,
   onNavigate,
+  onLoadMore,
 }: ConversationListProps) {
   const activeConversations = (conversations ?? []).filter((c) => !c.is_archived);
 
@@ -193,10 +198,15 @@ function ConversationList({
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 pb-3 scrollbar-thin">
+      <div className="flex-1 overflow-y-auto px-3 pb-3 scrollbar-thin" onScroll={(e) => {
+        const el = e.currentTarget;
+        if (!isLoading && el.scrollHeight - el.scrollTop - el.clientHeight < 100) {
+          onLoadMore?.();
+        }
+      }}>
         {isLoading && conversations.length === 0 ? (
-          <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-            Loading...
+          <div className="space-y-2 py-2">
+            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-9 w-full rounded-md" />)}
           </div>
         ) : activeConversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center text-sm text-muted-foreground">
@@ -236,6 +246,7 @@ export function ConversationSidebar({ className }: ConversationSidebarProps) {
     currentConversationId,
     isLoading,
     fetchConversations,
+    fetchMoreConversations,
     selectConversation,
     deleteConversation,
     archiveConversation,
@@ -256,6 +267,7 @@ export function ConversationSidebar({ className }: ConversationSidebarProps) {
     onArchive: archiveConversation,
     onRename: renameConversation,
     onNewChat: startNewChat,
+    onLoadMore: fetchMoreConversations,
   };
 
   if (isCollapsed) {

@@ -1,4 +1,4 @@
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_langchain %}
+{%- if cookiecutter.use_langchain %}
 """Assistant agent with LangChain.
 
 The main conversational agent that can be extended with custom tools.
@@ -16,9 +16,21 @@ from langchain_openai import ChatOpenAI
 {%- if cookiecutter.use_anthropic %}
 from langchain_anthropic import ChatAnthropic
 {%- endif %}
+{%- if cookiecutter.use_google %}
+from langchain_google_genai import ChatGoogleGenerativeAI
+{%- endif %}
 
 from app.agents.prompts import DEFAULT_SYSTEM_PROMPT
+{%- if cookiecutter.enable_rag %}
+from app.agents.prompts import get_system_prompt_with_rag
+{%- endif %}
 from app.agents.tools import get_current_datetime
+{%- if cookiecutter.enable_web_search %}
+from app.agents.tools.web_search import web_search_sync
+{%- endif %}
+{%- if cookiecutter.enable_rag %}
+from app.agents.tools.rag_tool import search_knowledge_base_sync
+{%- endif %}
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -53,6 +65,26 @@ def current_datetime() -> str:
     return get_current_datetime()
 
 
+{%- if cookiecutter.enable_rag %}
+@tool
+def search_documents(query: str, collection: str = "documents", top_k: int = 5) -> str:
+    """Search the knowledge base for relevant documents.
+
+    Use this tool to find information from uploaded documents before answering user queries.
+    Cite sources by referring to the document filename from the search results.
+
+    Args:
+        query: The search query string.
+        collection: Name of the collection to search (default: "documents").
+        top_k: Number of top results to retrieve (default: 5).
+
+    Returns:
+        Formatted string with search results including content and scores.
+    """
+    return search_knowledge_base_sync(query=query, collection=collection, top_k=top_k)
+{%- endif %}
+
+
 class LangChainAssistant:
     """Assistant agent wrapper for conversational AI using LangChain.
 
@@ -67,9 +99,19 @@ class LangChainAssistant:
     ):
         self.model_name = model_name or settings.AI_MODEL
         self.temperature = temperature or settings.AI_TEMPERATURE
+{%- if cookiecutter.enable_rag %}
+        self.system_prompt = system_prompt or get_system_prompt_with_rag()
+{%- else %}
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+{%- endif %}
         self._agent = None
         self._tools = [current_datetime]
+        {%- if cookiecutter.enable_web_search %}
+        self._tools.append(web_search_sync)
+        {%- endif %}
+        {%- if cookiecutter.enable_rag %}
+        self._tools.append(search_documents)
+        {%- endif %}
 
     def _create_agent(self):
         """Create and configure the LangChain agent."""
@@ -85,6 +127,13 @@ class LangChainAssistant:
             model=self.model_name,
             temperature=self.temperature,
             api_key=settings.ANTHROPIC_API_KEY,
+        )
+{%- endif %}
+{%- if cookiecutter.use_google %}
+        model = ChatGoogleGenerativeAI(
+            model=self.model_name,
+            temperature=self.temperature,
+            google_api_key=settings.GOOGLE_API_KEY,
         )
 {%- endif %}
 

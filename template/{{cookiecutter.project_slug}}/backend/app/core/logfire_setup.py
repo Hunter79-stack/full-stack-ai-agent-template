@@ -1,6 +1,8 @@
 {%- if cookiecutter.enable_logfire %}
 """Logfire observability configuration."""
 
+from typing import Any
+
 import logfire
 
 from app.core.config import settings
@@ -16,7 +18,7 @@ def setup_logfire() -> None:
     )
 
 
-def instrument_app(app):
+def instrument_app(app: Any) -> None:
     """Instrument FastAPI app with Logfire."""
 {%- if cookiecutter.logfire_fastapi %}
     logfire.instrument_fastapi(app)
@@ -28,7 +30,7 @@ def instrument_app(app):
 {%- if cookiecutter.use_postgresql and cookiecutter.logfire_database %}
 
 
-def instrument_asyncpg():
+def instrument_asyncpg() -> None:
     """Instrument asyncpg for PostgreSQL."""
     logfire.instrument_asyncpg()
 {%- endif %}
@@ -37,7 +39,7 @@ def instrument_asyncpg():
 {%- if cookiecutter.use_mongodb and cookiecutter.logfire_database %}
 
 
-def instrument_pymongo():
+def instrument_pymongo() -> None:
     """Instrument PyMongo/Motor for MongoDB."""
     logfire.instrument_pymongo(capture_statement=settings.DEBUG)
 {%- endif %}
@@ -46,7 +48,7 @@ def instrument_pymongo():
 {%- if cookiecutter.use_sqlite and cookiecutter.logfire_database %}
 
 
-def instrument_sqlalchemy(engine):
+def instrument_sqlalchemy(engine: Any) -> None:
     """Instrument SQLAlchemy for SQLite."""
     logfire.instrument_sqlalchemy(engine=engine)
 {%- endif %}
@@ -55,7 +57,7 @@ def instrument_sqlalchemy(engine):
 {%- if cookiecutter.enable_redis and cookiecutter.logfire_redis %}
 
 
-def instrument_redis():
+def instrument_redis() -> None:
     """Instrument Redis."""
     logfire.instrument_redis()
 {%- endif %}
@@ -64,7 +66,7 @@ def instrument_redis():
 {%- if cookiecutter.use_celery and cookiecutter.logfire_celery %}
 
 
-def instrument_celery():
+def instrument_celery() -> None:
     """Instrument Celery."""
     logfire.instrument_celery()
 {%- endif %}
@@ -73,16 +75,16 @@ def instrument_celery():
 {%- if cookiecutter.logfire_httpx %}
 
 
-def instrument_httpx():
+def instrument_httpx() -> None:
     """Instrument HTTPX for outgoing HTTP requests."""
     logfire.instrument_httpx()
 {%- endif %}
 
 
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_pydantic_ai %}
+{%- if cookiecutter.use_pydantic_ai %}
 
 
-def instrument_pydantic_ai():
+def instrument_pydantic_ai() -> None:
     """Instrument PydanticAI for AI agent observability."""
     logfire.instrument_pydantic_ai()
 {%- endif %}
@@ -95,7 +97,7 @@ def setup_logfire() -> None:
     pass
 
 
-def instrument_app(app):
+def instrument_app(app: object) -> None:
     """No-op when Logfire is disabled."""
     pass
 {%- endif %}

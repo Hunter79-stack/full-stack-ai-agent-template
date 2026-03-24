@@ -8,13 +8,14 @@ from uuid import UUID
 
 from app.api.deps import WebhookSvc
 {%- if cookiecutter.use_jwt %}
-from app.api.deps import CurrentUser
+from app.api.deps import CurrentAdmin
 {%- endif %}
 from app.schemas.webhook import (
     WebhookCreate,
     WebhookDeliveryListResponse,
     WebhookListResponse,
     WebhookRead,
+    WebhookSecretResponse,
     WebhookTestResponse,
     WebhookUpdate,
 )
@@ -30,7 +31,7 @@ async def create_webhook(
     data: WebhookCreate,
     webhook_service: WebhookSvc,
 {%- if cookiecutter.use_jwt %}
-    current_user: CurrentUser,
+    current_user: CurrentAdmin,
 {%- endif %}
 ):
     """Create a new webhook subscription."""
@@ -56,7 +57,7 @@ async def create_webhook(
 async def list_webhooks(
     webhook_service: WebhookSvc,
 {%- if cookiecutter.use_jwt %}
-    current_user: CurrentUser,
+    current_user: CurrentAdmin,
 {%- endif %}
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
@@ -126,7 +127,7 @@ async def update_webhook(
     )
 
 
-@router.delete("/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_webhook(
     webhook_id: UUID,
     webhook_service: WebhookSvc,
@@ -145,14 +146,14 @@ async def test_webhook(
     return WebhookTestResponse(**result)
 
 
-@router.post("/{webhook_id}/regenerate-secret")
+@router.post("/{webhook_id}/regenerate-secret", response_model=WebhookSecretResponse)
 async def regenerate_webhook_secret(
     webhook_id: UUID,
     webhook_service: WebhookSvc,
 ):
     """Regenerate the webhook secret."""
     new_secret = await webhook_service.regenerate_secret(webhook_id)
-    return {"secret": new_secret}
+    return WebhookSecretResponse(secret=new_secret)
 
 
 @router.get("/{webhook_id}/deliveries", response_model=WebhookDeliveryListResponse)
@@ -193,7 +194,7 @@ def create_webhook(
     data: WebhookCreate,
     webhook_service: WebhookSvc,
 {%- if cookiecutter.use_jwt %}
-    current_user: CurrentUser,
+    current_user: CurrentAdmin,
 {%- endif %}
 ):
     """Create a new webhook subscription."""
@@ -219,7 +220,7 @@ def create_webhook(
 def list_webhooks(
     webhook_service: WebhookSvc,
 {%- if cookiecutter.use_jwt %}
-    current_user: CurrentUser,
+    current_user: CurrentAdmin,
 {%- endif %}
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
@@ -289,7 +290,7 @@ def update_webhook(
     )
 
 
-@router.delete("/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_webhook(
     webhook_id: str,
     webhook_service: WebhookSvc,
@@ -336,7 +337,7 @@ async def create_webhook(
     data: WebhookCreate,
     webhook_service: WebhookSvc,
 {%- if cookiecutter.use_jwt %}
-    current_user: CurrentUser,
+    current_user: CurrentAdmin,
 {%- endif %}
 ):
     """Create a new webhook subscription."""
@@ -362,7 +363,7 @@ async def create_webhook(
 async def list_webhooks(
     webhook_service: WebhookSvc,
 {%- if cookiecutter.use_jwt %}
-    current_user: CurrentUser,
+    current_user: CurrentAdmin,
 {%- endif %}
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
@@ -432,7 +433,7 @@ async def update_webhook(
     )
 
 
-@router.delete("/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_webhook(
     webhook_id: str,
     webhook_service: WebhookSvc,

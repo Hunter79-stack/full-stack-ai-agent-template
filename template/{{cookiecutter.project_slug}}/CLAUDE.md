@@ -2,22 +2,23 @@
 
 ## Project Overview
 
-**{{ cookiecutter.project_name }}** - FastAPI application generated with [Full-Stack FastAPI + Next.js Template](https://github.com/vstorm-co/full-stack-ai-agent-template).
+**{{ cookiecutter.project_name }}** - FastAPI application generated with [Full-Stack AI Agent Template](https://github.com/vstorm-co/full-stack-ai-agent-template).
 
 **Stack:** FastAPI + Pydantic v2
 {%- if cookiecutter.use_postgresql %}, PostgreSQL (async){%- endif %}
 {%- if cookiecutter.use_mongodb %}, MongoDB (async){%- endif %}
 {%- if cookiecutter.use_sqlite %}, SQLite{%- endif %}
-{%- if cookiecutter.use_jwt %}, JWT auth{%- endif %}
+, JWT + API Key auth
 {%- if cookiecutter.enable_redis %}, Redis{%- endif %}
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_pydantic_ai %}, PydanticAI{%- endif %}
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_langchain %}, LangChain{%- endif %}
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_langgraph %}, LangGraph{%- endif %}
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_crewai %}, CrewAI{%- endif %}
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_deepagents %}, DeepAgents{%- endif %}
+{%- if cookiecutter.use_pydantic_ai %}, PydanticAI{%- endif %}
+{%- if cookiecutter.use_langchain %}, LangChain{%- endif %}
+{%- if cookiecutter.use_langgraph %}, LangGraph{%- endif %}
+{%- if cookiecutter.use_crewai %}, CrewAI{%- endif %}
+{%- if cookiecutter.use_deepagents %}, DeepAgents{%- endif %}
+{%- if cookiecutter.enable_rag %}, RAG ({{ cookiecutter.vector_store }}){%- endif %}
 {%- if cookiecutter.use_celery %}, Celery{%- endif %}
 {%- if cookiecutter.use_taskiq %}, Taskiq{%- endif %}
-{%- if cookiecutter.use_frontend %}, Next.js 15{%- endif %}
+{%- if cookiecutter.use_frontend %}, Next.js 15 (i18n){%- endif %}
 
 ## Commands
 
@@ -45,6 +46,24 @@ bun test
 # Docker
 docker compose up -d
 {%- endif %}
+{%- if cookiecutter.enable_rag %}
+
+# RAG
+uv run {{ cookiecutter.project_slug }} rag-collections
+uv run {{ cookiecutter.project_slug }} rag-ingest /path/to/file.pdf --collection docs
+uv run {{ cookiecutter.project_slug }} rag-search "query" --collection docs
+{%- if cookiecutter.enable_google_drive_ingestion %}
+uv run {{ cookiecutter.project_slug }} rag-sync-gdrive --collection docs
+{%- endif %}
+{%- if cookiecutter.enable_s3_ingestion %}
+uv run {{ cookiecutter.project_slug }} rag-sync-s3 --collection docs
+{%- endif %}
+
+# Sync Sources
+uv run {{ cookiecutter.project_slug }} cmd rag-sources
+uv run {{ cookiecutter.project_slug }} cmd rag-source-add
+uv run {{ cookiecutter.project_slug }} cmd rag-source-sync
+{%- endif %}
 ```
 
 ## Project Structure
@@ -57,8 +76,10 @@ backend/app/
 ├── schemas/          # Pydantic models
 ├── db/models/        # Database models
 ├── core/config.py    # Settings
-{%- if cookiecutter.enable_ai_agent %}
 ├── agents/           # AI agents
+{%- if cookiecutter.enable_rag %}
+├── rag/              # RAG (embeddings, vector store, ingestion)
+│   └── connectors/   # Sync source connectors (Google Drive, S3)
 {%- endif %}
 └── commands/         # CLI commands
 ```
@@ -69,14 +90,10 @@ backend/app/
 - Services raise domain exceptions (`NotFoundError`, `AlreadyExistsError`)
 - Schemas: separate `Create`, `Update`, `Response` models
 - Commands auto-discovered from `app/commands/`
-
-## Where to Find More Info
-
-Before starting complex tasks, read relevant docs:
-- **Architecture details:** `docs/architecture.md`
-- **Adding features:** `docs/adding_features.md`
-- **Testing guide:** `docs/testing.md`
-- **Code patterns:** `docs/patterns.md`
+{%- if cookiecutter.enable_rag %}
+- Document ingestion via CLI and API upload
+- Sync sources: configurable connectors with scheduled sync
+{%- endif %}
 
 ## Environment Variables
 
@@ -87,19 +104,31 @@ ENVIRONMENT=local
 POSTGRES_HOST=localhost
 POSTGRES_PASSWORD=secret
 {%- endif %}
-{%- if cookiecutter.use_jwt %}
 SECRET_KEY=change-me-use-openssl-rand-hex-32
-{%- endif %}
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_openai %}
+{%- if cookiecutter.use_openai %}
 OPENAI_API_KEY=sk-...
 {%- endif %}
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_anthropic %}
+{%- if cookiecutter.use_anthropic %}
 ANTHROPIC_API_KEY=sk-ant-...
 {%- endif %}
+{%- if cookiecutter.use_google %}
+GOOGLE_API_KEY=...
+{%- endif %}
+AI_MODEL=gpt-4.1-mini           # Default LLM model for chat
+AI_AVAILABLE_MODELS=             # JSON list of models shown in UI selector (auto-configured)
+AI_TEMPERATURE=0.7               # LLM temperature (0.0-1.0)
 {%- if cookiecutter.enable_logfire %}
 LOGFIRE_TOKEN=your-token
 {%- endif %}
 {%- if cookiecutter.enable_langsmith %}
 LANGCHAIN_API_KEY=your-api-key
+{%- endif %}
+{%- if cookiecutter.use_milvus %}
+MILVUS_HOST=localhost
+MILVUS_PORT=19530
+{%- endif %}
+{%- if cookiecutter.use_qdrant %}
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
 {%- endif %}
 ```

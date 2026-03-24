@@ -6,6 +6,11 @@
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
+{%- if cookiecutter.use_sqlite %}
+ServiceMock = MagicMock
+{%- else %}
+ServiceMock = AsyncMock
+{%- endif %}
 from uuid import uuid4
 
 import pytest
@@ -31,8 +36,7 @@ class MockUser:
         email="test@example.com",
         full_name="Test User",
         is_active=True,
-        is_superuser=False,
-        role="admin",
+        role="user",
     ):
 {%- if cookiecutter.use_postgresql %}
         self.id = id or uuid4()
@@ -42,7 +46,6 @@ class MockUser:
         self.email = email
         self.full_name = full_name
         self.is_active = is_active
-        self.is_superuser = is_superuser
         self.role = role
         self.hashed_password = "hashed"
         self.created_at = datetime.now(UTC)
@@ -64,17 +67,24 @@ def mock_user() -> MockUser:
 @pytest.fixture
 def mock_superuser() -> MockUser:
     """Create a mock superuser."""
-    return MockUser(is_superuser=True, email="admin@example.com")
+    return MockUser(role="admin", email="admin@example.com")
 
 
 @pytest.fixture
 def mock_user_service(mock_user: MockUser) -> MagicMock:
     """Create a mock user service."""
     service = MagicMock()
-    service.get_by_id = AsyncMock(return_value=mock_user)
-    service.get_multi = AsyncMock(return_value=[mock_user])
-    service.update = AsyncMock(return_value=mock_user)
-    service.delete = AsyncMock(return_value=mock_user)
+{%- if cookiecutter.use_sqlite %}
+    service.get_by_id = MagicMock(return_value=mock_user)
+    service.get_multi = MagicMock(return_value=[mock_user])
+    service.update = MagicMock(return_value=mock_user)
+    service.delete = MagicMock(return_value=mock_user)
+{%- else %}
+    service.get_by_id = ServiceMock(return_value=mock_user)
+    service.get_multi = ServiceMock(return_value=[mock_user])
+    service.update = ServiceMock(return_value=mock_user)
+    service.delete = ServiceMock(return_value=mock_user)
+{%- endif %}
     return service
 
 
@@ -195,7 +205,7 @@ async def test_read_user_by_id_not_found(
     """Test getting non-existent user."""
     from app.core.exceptions import NotFoundError
 
-    mock_user_service.get_by_id = AsyncMock(
+    mock_user_service.get_by_id = ServiceMock(
         side_effect=NotFoundError(message="User not found")
     )
 
@@ -242,7 +252,7 @@ async def test_delete_user_by_id_not_found(
     """Test deleting non-existent user."""
     from app.core.exceptions import NotFoundError
 
-    mock_user_service.delete = AsyncMock(
+    mock_user_service.delete = ServiceMock(
         side_effect=NotFoundError(message="User not found")
     )
 

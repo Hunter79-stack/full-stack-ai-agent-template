@@ -8,7 +8,6 @@ from click.testing import CliRunner
 
 from fastapi_gen.cli import cli, create, main, new, templates
 from fastapi_gen.config import (
-    AuthType,
     BackgroundTaskType,
     CIType,
     DatabaseType,
@@ -38,6 +37,33 @@ class TestCli:
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
         assert "fastapi-fullstack" in result.output
+
+    @patch("fastapi_gen.cli.run_interactive_prompts")
+    @patch("fastapi_gen.cli.show_summary")
+    @patch("fastapi_gen.cli.confirm_generation")
+    @patch("fastapi_gen.cli.generate_project")
+    @patch("fastapi_gen.cli.post_generation_tasks")
+    def test_cli_no_subcommand_invokes_new(
+        self,
+        mock_post_gen: MagicMock,
+        mock_generate: MagicMock,
+        mock_confirm: MagicMock,
+        mock_summary: MagicMock,
+        mock_prompts: MagicMock,
+        runner: CliRunner,
+        tmp_path: Path,
+    ) -> None:
+        """Test that invoking cli without subcommand calls 'new'."""
+        mock_prompts.return_value = ProjectConfig(
+            project_name="testproject", background_tasks=BackgroundTaskType.NONE
+        )
+        mock_confirm.return_value = True
+        mock_generate.return_value = tmp_path / "testproject"
+
+        result = runner.invoke(cli, [])
+
+        assert result.exit_code == 0
+        mock_prompts.assert_called_once()
 
 
 class TestNewCommand:
@@ -89,7 +115,7 @@ class TestNewCommand:
         tmp_path: Path,
     ) -> None:
         """Test new command in interactive mode."""
-        mock_prompts.return_value = ProjectConfig(project_name="testproject")
+        mock_prompts.return_value = ProjectConfig(project_name="testproject", background_tasks=BackgroundTaskType.NONE)
         mock_confirm.return_value = True
         mock_generate.return_value = tmp_path / "testproject"
 
@@ -112,7 +138,7 @@ class TestNewCommand:
         runner: CliRunner,
     ) -> None:
         """Test new command cancelled by user."""
-        mock_prompts.return_value = ProjectConfig(project_name="testproject")
+        mock_prompts.return_value = ProjectConfig(project_name="testproject", background_tasks=BackgroundTaskType.NONE)
         mock_confirm.return_value = False
 
         result = runner.invoke(new, [])
@@ -192,7 +218,7 @@ class TestNewCommand:
         tmp_path: Path,
     ) -> None:
         """Test new command in interactive mode with output dir."""
-        mock_prompts.return_value = ProjectConfig(project_name="testproject")
+        mock_prompts.return_value = ProjectConfig(project_name="testproject", background_tasks=BackgroundTaskType.NONE)
         mock_confirm.return_value = True
         mock_generate.return_value = tmp_path / "testproject"
 
@@ -233,7 +259,6 @@ class TestCreateCommand:
         config = mock_generate.call_args[0][0]
         assert config.project_name == "myproject"
         assert config.database == DatabaseType.POSTGRESQL
-        assert config.auth == AuthType.JWT
 
     @patch("fastapi_gen.cli.generate_project")
     @patch("fastapi_gen.cli.post_generation_tasks")
@@ -252,24 +277,6 @@ class TestCreateCommand:
         assert result.exit_code == 0
         config = mock_generate.call_args[0][0]
         assert config.database == DatabaseType.MONGODB
-
-    @patch("fastapi_gen.cli.generate_project")
-    @patch("fastapi_gen.cli.post_generation_tasks")
-    def test_create_with_api_key_auth(
-        self,
-        mock_post_gen: MagicMock,
-        mock_generate: MagicMock,
-        runner: CliRunner,
-        tmp_path: Path,
-    ) -> None:
-        """Test create with API key authentication."""
-        mock_generate.return_value = tmp_path / "myproject"
-
-        result = runner.invoke(create, ["myproject", "--auth", "api_key"])
-
-        assert result.exit_code == 0
-        config = mock_generate.call_args[0][0]
-        assert config.auth == AuthType.API_KEY
 
     @patch("fastapi_gen.cli.generate_project")
     @patch("fastapi_gen.cli.post_generation_tasks")
@@ -323,8 +330,7 @@ class TestCreateCommand:
 
         assert result.exit_code == 0
         config = mock_generate.call_args[0][0]
-        assert config.database == DatabaseType.NONE
-        assert config.auth == AuthType.NONE
+        assert config.database == DatabaseType.SQLITE
         assert config.enable_logfire is False
         assert config.enable_docker is False
         assert config.ci_type == CIType.NONE
@@ -371,42 +377,40 @@ class TestCreateCommand:
 
     @patch("fastapi_gen.cli.generate_project")
     @patch("fastapi_gen.cli.post_generation_tasks")
-    def test_create_with_ai_agent_pydantic_ai(
+    def test_create_with_ai_framework_pydantic_ai(
         self,
         mock_post_gen: MagicMock,
         mock_generate: MagicMock,
         runner: CliRunner,
         tmp_path: Path,
     ) -> None:
-        """Test create with AI agent (PydanticAI)."""
+        """Test create with AI framework (PydanticAI)."""
         mock_generate.return_value = tmp_path / "myproject"
 
-        result = runner.invoke(create, ["myproject", "--ai-agent", "--ai-framework", "pydantic_ai"])
+        result = runner.invoke(create, ["myproject", "--ai-framework", "pydantic_ai"])
 
         assert result.exit_code == 0
         assert "AI Agent: pydantic_ai" in result.output
         config = mock_generate.call_args[0][0]
-        assert config.enable_ai_agent is True
         assert config.ai_framework.value == "pydantic_ai"
 
     @patch("fastapi_gen.cli.generate_project")
     @patch("fastapi_gen.cli.post_generation_tasks")
-    def test_create_with_ai_agent_langchain(
+    def test_create_with_ai_framework_langchain(
         self,
         mock_post_gen: MagicMock,
         mock_generate: MagicMock,
         runner: CliRunner,
         tmp_path: Path,
     ) -> None:
-        """Test create with AI agent (LangChain)."""
+        """Test create with AI framework (LangChain)."""
         mock_generate.return_value = tmp_path / "myproject"
 
-        result = runner.invoke(create, ["myproject", "--ai-agent", "--ai-framework", "langchain"])
+        result = runner.invoke(create, ["myproject", "--ai-framework", "langchain"])
 
         assert result.exit_code == 0
         assert "AI Agent: langchain" in result.output
         config = mock_generate.call_args[0][0]
-        assert config.enable_ai_agent is True
         assert config.ai_framework.value == "langchain"
 
     # Tests for new CLI options
@@ -453,9 +457,7 @@ class TestCreateCommand:
         assert result.exit_code == 0
         assert "Preset: ai-agent" in result.output
         config = mock_generate.call_args[0][0]
-        assert config.enable_ai_agent is True
         assert config.enable_websockets is True
-        assert config.enable_conversation_persistence is True
         assert config.enable_redis is True
 
     @patch("fastapi_gen.cli.generate_project")
@@ -530,24 +532,6 @@ class TestCreateCommand:
         assert result.exit_code == 0
         config = mock_generate.call_args[0][0]
         assert config.enable_admin_panel is True
-
-    @patch("fastapi_gen.cli.generate_project")
-    @patch("fastapi_gen.cli.post_generation_tasks")
-    def test_create_with_websockets(
-        self,
-        mock_post_gen: MagicMock,
-        mock_generate: MagicMock,
-        runner: CliRunner,
-        tmp_path: Path,
-    ) -> None:
-        """Test create with WebSocket support."""
-        mock_generate.return_value = tmp_path / "myproject"
-
-        result = runner.invoke(create, ["myproject", "--websockets"])
-
-        assert result.exit_code == 0
-        config = mock_generate.call_args[0][0]
-        assert config.enable_websockets is True
 
     @patch("fastapi_gen.cli.generate_project")
     @patch("fastapi_gen.cli.post_generation_tasks")
@@ -751,24 +735,6 @@ class TestCreateCommand:
 
     @patch("fastapi_gen.cli.generate_project")
     @patch("fastapi_gen.cli.post_generation_tasks")
-    def test_create_with_i18n(
-        self,
-        mock_post_gen: MagicMock,
-        mock_generate: MagicMock,
-        runner: CliRunner,
-        tmp_path: Path,
-    ) -> None:
-        """Test create with i18n enabled."""
-        mock_generate.return_value = tmp_path / "myproject"
-
-        result = runner.invoke(create, ["myproject", "--i18n"])
-
-        assert result.exit_code == 0
-        config = mock_generate.call_args[0][0]
-        assert config.enable_i18n is True
-
-    @patch("fastapi_gen.cli.generate_project")
-    @patch("fastapi_gen.cli.post_generation_tasks")
     def test_create_with_multiple_options(
         self,
         mock_post_gen: MagicMock,
@@ -787,7 +753,6 @@ class TestCreateCommand:
                 "--caching",
                 "--rate-limiting",
                 "--admin-panel",
-                "--websockets",
                 "--task-queue",
                 "taskiq",
                 "--sentry",
@@ -801,7 +766,6 @@ class TestCreateCommand:
         assert config.enable_caching is True
         assert config.enable_rate_limiting is True
         assert config.enable_admin_panel is True
-        assert config.enable_websockets is True
         assert config.background_tasks == BackgroundTaskType.TASKIQ
         assert config.enable_sentry is True
         assert config.enable_prometheus is True
@@ -826,8 +790,8 @@ class TestTemplatesCommand:
         assert "mongodb" in result.output
         # Authentication
         assert "Authentication" in result.output
-        assert "jwt" in result.output
-        assert "api_key" in result.output
+        assert "JWT" in result.output
+        assert "API Key" in result.output
         assert "--oauth-google" in result.output
         assert "--session-management" in result.output
         # Background Tasks

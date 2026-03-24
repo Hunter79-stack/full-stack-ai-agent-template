@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from fastapi_gen.config import DatabaseType, FrontendType, LogfireFeatures, ProjectConfig
+from fastapi_gen.config import BackgroundTaskType, DatabaseType, FrontendType, ProjectConfig, RAGFeatures, VectorStoreType
 from fastapi_gen.generator import (
     TEMPLATE_DIR,
     _find_template_dir,
@@ -162,8 +162,6 @@ class TestGenerateProject:
         call_kwargs = mock_cookiecutter.call_args
         extra_context = call_kwargs[1]["extra_context"]
         assert extra_context["project_name"] == "test_project"
-        assert extra_context["use_database"] is False
-        assert extra_context["use_auth"] is False
 
     def test_raises_if_directory_exists_and_not_empty(
         self,
@@ -217,6 +215,7 @@ class TestPostGenerationTasks:
         config = ProjectConfig(
             project_name="test",
             enable_precommit=True,
+            background_tasks=BackgroundTaskType.NONE,
         )
         project_path = temp_output_dir / "test"
         project_path.mkdir()
@@ -229,6 +228,7 @@ class TestPostGenerationTasks:
         config = ProjectConfig(
             project_name="test",
             database=DatabaseType.POSTGRESQL,
+            background_tasks=BackgroundTaskType.NONE,
         )
         project_path = temp_output_dir / "test"
         project_path.mkdir()
@@ -241,6 +241,7 @@ class TestPostGenerationTasks:
         config = ProjectConfig(
             project_name="test",
             enable_logfire=True,
+            background_tasks=BackgroundTaskType.NONE,
         )
         project_path = temp_output_dir / "test"
         project_path.mkdir()
@@ -254,6 +255,7 @@ class TestPostGenerationTasks:
             project_name="test",
             frontend=FrontendType.NEXTJS,
             database=DatabaseType.POSTGRESQL,
+            background_tasks=BackgroundTaskType.NONE,
         )
         project_path = temp_output_dir / "test"
         project_path.mkdir()
@@ -268,8 +270,8 @@ class TestPostGenerationTasks:
         config = ProjectConfig(
             project_name="test",
             frontend=FrontendType.NEXTJS,
-            database=DatabaseType.NONE,
-            logfire_features=LogfireFeatures(database=False),  # Disable logfire DB when no DB
+            database=DatabaseType.SQLITE,
+            background_tasks=BackgroundTaskType.NONE,
         )
         project_path = temp_output_dir / "test"
         project_path.mkdir()
@@ -285,6 +287,7 @@ class TestPostGenerationTasks:
             project_name="test",
             frontend=FrontendType.NEXTJS,
             generate_env=False,
+            background_tasks=BackgroundTaskType.NONE,
         )
         project_path = temp_output_dir / "test"
         project_path.mkdir()
@@ -300,6 +303,7 @@ class TestPostGenerationTasks:
             project_name="test",
             frontend=FrontendType.NONE,
             generate_env=False,
+            background_tasks=BackgroundTaskType.NONE,
         )
         project_path = temp_output_dir / "test"
         project_path.mkdir()
@@ -315,9 +319,64 @@ class TestPostGenerationTasks:
             project_name="test",
             frontend=FrontendType.NONE,
             generate_env=True,
+            background_tasks=BackgroundTaskType.NONE,
         )
         project_path = temp_output_dir / "test"
         project_path.mkdir()
 
         # Should not raise - tests lines 172-174
+        post_generation_tasks(project_path, config)
+
+    def test_displays_db_command_without_description(
+        self, temp_output_dir: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test database command without description prints correctly (line 202).
+
+        MongoDB has a command with empty description: '# Or configure MongoDB Atlas...'
+        The backend-only path (frontend=NONE) exercises line 202.
+        """
+        config = ProjectConfig(
+            project_name="test",
+            database=DatabaseType.MONGODB,
+            frontend=FrontendType.NONE,
+            background_tasks=BackgroundTaskType.NONE,
+        )
+        project_path = temp_output_dir / "test"
+        project_path.mkdir()
+
+        # Should not raise - exercises line 202 (cmd without description)
+        post_generation_tasks(project_path, config)
+
+    def test_displays_rag_messages_when_rag_enabled(
+        self, temp_output_dir: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test RAG post-generation messages are displayed (lines 226-232)."""
+        config = ProjectConfig(
+            project_name="test",
+            database=DatabaseType.POSTGRESQL,
+            rag_features=RAGFeatures(
+                enable_rag=True,
+                vector_store=VectorStoreType.MILVUS,
+            ),
+            background_tasks=BackgroundTaskType.NONE,
+        )
+        project_path = temp_output_dir / "test"
+        project_path.mkdir()
+
+        # Should not raise - exercises lines 226-232 (RAG messages)
+        post_generation_tasks(project_path, config)
+
+    def test_displays_web_search_env_message(
+        self, temp_output_dir: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test web search env message is displayed (line 235)."""
+        config = ProjectConfig(
+            project_name="test",
+            enable_web_search=True,
+            background_tasks=BackgroundTaskType.NONE,
+        )
+        project_path = temp_output_dir / "test"
+        project_path.mkdir()
+
+        # Should not raise - exercises line 235 (TAVILY_API_KEY message)
         post_generation_tasks(project_path, config)

@@ -1,18 +1,12 @@
-{%- if cookiecutter.enable_i18n %}
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
-{%- endif %}
 import { notFound } from "next/navigation";
 import { Providers } from "../providers";
-{%- if cookiecutter.enable_i18n %}
 import { locales, type Locale } from "@/i18n";
-{%- endif %}
 
-{%- if cookiecutter.enable_i18n %}
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
 }
-{%- endif %}
 
 export default async function LocaleLayout({
   children,
@@ -23,7 +17,6 @@ export default async function LocaleLayout({
 }) {
   const { locale } = await params;
 
-{%- if cookiecutter.enable_i18n %}
   // Validate locale
   if (!locales.includes(locale as Locale)) {
     notFound();
@@ -39,8 +32,4 @@ export default async function LocaleLayout({
       </NextIntlClientProvider>
     </Providers>
   );
-{%- else %}
-  // i18n disabled - just render with providers
-  return <Providers>{children}</Providers>;
-{%- endif %}
 }

@@ -1,16 +1,16 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import { useWebSocket } from "./use-websocket";
 import { useChatStore } from "@/stores";
 import type { ChatMessage, ToolCall, WSEvent, PendingApproval, Decision } from "@/types";
 import { WS_URL } from "@/lib/constants";
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 import { useConversationStore } from "@/stores";
 {%- endif %}
 
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 interface UseChatOptions {
   conversationId?: string | null;
   onConversationCreated?: (conversationId: string) => void;
@@ -33,8 +33,9 @@ export function useChat() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentMessageId, setCurrentMessageId] = useState<string | null>(null);
-  // Use ref for groupId to avoid React state timing issues with rapid WebSocket events
   const currentGroupIdRef = useRef<string | null>(null);
+  const messageQueueRef = useRef<{ content: string; fileIds?: string[] }[]>([]);
+  const modelRef = useRef<string | null>(null);
   // Human-in-the-Loop: pending tool approval state
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
 
@@ -67,7 +68,7 @@ export function useChat() {
       };
 
       switch (wsEvent.type) {
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
         case "conversation_created": {
           // Handle new conversation created by backend
           const { conversation_id } = wsEvent.data as { conversation_id: string };
@@ -326,7 +327,7 @@ export function useChat() {
         }
       }
     },
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
     [currentMessageId, addMessage, updateMessage, addToolCall, updateToolCall, setCurrentConversationId, onConversationCreated]
 {%- else %}
     [currentMessageId, addMessage, updateMessage, addToolCall, updateToolCall]
@@ -340,33 +341,48 @@ export function useChat() {
     onMessage: handleWebSocketMessage,
   });
 
-  const sendChatMessage = useCallback(
-    (content: string) => {
-      // Add user message
-      const userMessage: ChatMessage = {
+  const doSend = useCallback(
+    (content: string, fileIds?: string[]) => {
+      addMessage({
         id: nanoid(),
         role: "user",
         content,
         timestamp: new Date(),
-      };
-      addMessage(userMessage);
-
-      // Send to WebSocket
+        fileIds,
+      });
       setIsProcessing(true);
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
-      sendMessage({
+{%- if cookiecutter.use_database %}
+      const payload: Record<string, unknown> = {
         message: content,
         conversation_id: conversationId || null,
-      });
+      };
+      if (fileIds?.length) payload.file_ids = fileIds;
+      if (modelRef.current) payload.model = modelRef.current;
+      sendMessage(payload);
 {%- else %}
-      sendMessage({ message: content });
+      const payload: Record<string, unknown> = { message: content };
+      if (fileIds?.length) payload.file_ids = fileIds;
+      if (modelRef.current) payload.model = modelRef.current;
+      sendMessage(payload);
 {%- endif %}
     },
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
     [addMessage, sendMessage, conversationId]
 {%- else %}
     [addMessage, sendMessage]
 {%- endif %}
+  );
+
+  const sendChatMessage = useCallback(
+    (content: string, fileIds?: string[]) => {
+      if (isProcessing) {
+        messageQueueRef.current.push({ content, fileIds });
+        addMessage({ id: nanoid(), role: "user", content, timestamp: new Date(), fileIds });
+        return;
+      }
+      doSend(content, fileIds);
+    },
+    [isProcessing, doSend, addMessage]
   );
 
   // Human-in-the-Loop: send resume message with user decisions
@@ -412,6 +428,16 @@ export function useChat() {
     [currentMessageId, updateMessage, sendMessage]
   );
 
+  // Drain message queue when processing finishes
+  useEffect(() => {
+    if (!isProcessing && messageQueueRef.current.length > 0) {
+      const next = messageQueueRef.current.shift();
+      if (next) {
+        setTimeout(() => doSend(next.content, next.fileIds), 100);
+      }
+    }
+  }, [isProcessing, doSend]);
+
   return {
     messages,
     isConnected,
@@ -420,6 +446,7 @@ export function useChat() {
     disconnect,
     sendMessage: sendChatMessage,
     clearMessages,
+    setModel: (model: string | null) => { modelRef.current = model; },
     // Human-in-the-Loop support
     pendingApproval,
     sendResumeDecisions,

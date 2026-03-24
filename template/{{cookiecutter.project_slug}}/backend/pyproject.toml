@@ -4,13 +4,16 @@ version = "0.1.0"
 description = "{{ cookiecutter.project_description }}"
 requires-python = ">={{ cookiecutter.python_version }}"
 license = { text = "MIT" }
-authors = [{ name = "{{ cookiecutter.author_name }}", email = "{{ cookiecutter.author_email }}" }]
+authors = [
+    { name = "{{ cookiecutter.author_name }}", email = "{{ cookiecutter.author_email }}" },
+]
 
 dependencies = [
-    "fastapi>=0.115.0",
+    "fastapi>=0.135.0",
     "uvicorn[standard]>=0.32.0",
     "pydantic[email]>=2.10.0",
     "pydantic-settings>=2.6.0",
+    "python-multipart>=0.0.12",
 {%- if cookiecutter.enable_orjson %}
     "orjson>=3.10.0",
 {%- endif %}
@@ -82,9 +85,9 @@ dependencies = [
 {%- endif %}
 {%- if cookiecutter.enable_admin_panel %}
     "sqladmin>=0.19.0",
-{%- if cookiecutter.admin_require_auth %}
-    "itsdangerous>=2.2.0",
 {%- endif %}
+{%- if (cookiecutter.enable_admin_panel and cookiecutter.admin_require_auth) or cookiecutter.enable_oauth %}
+    "itsdangerous>=2.2.0",
 {%- endif %}
 {%- if cookiecutter.use_celery %}
     "celery[redis]>=5.4.0",
@@ -101,18 +104,21 @@ dependencies = [
 {%- if cookiecutter.enable_file_storage %}
     "boto3>=1.35.0",
 {%- endif %}
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_pydantic_ai %}
+{%- if cookiecutter.use_pydantic_ai %}
 {%- if cookiecutter.use_openai %}
     "pydantic-ai>=0.0.39",
 {%- endif %}
 {%- if cookiecutter.use_anthropic %}
     "pydantic-ai-slim[anthropic]>=0.0.39",
 {%- endif %}
+{%- if cookiecutter.use_google %}
+    "pydantic-ai-slim[google]>=0.0.39",
+{%- endif %}
 {%- if cookiecutter.use_openrouter %}
     "pydantic-ai-slim[openrouter]>=0.0.39",
 {%- endif %}
 {%- endif %}
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_langchain %}
+{%- if cookiecutter.use_langchain %}
     "langchain>=0.3.0",
 {%- if cookiecutter.use_openai %}
     "langchain-openai>=0.3.0",
@@ -120,9 +126,12 @@ dependencies = [
 {%- if cookiecutter.use_anthropic %}
     "langchain-anthropic>=0.3.0",
 {%- endif %}
+{%- if cookiecutter.use_google %}
+    "langchain-google-genai>=2.0.0",
+{%- endif %}
     "langgraph>=0.2.0",
 {%- endif %}
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_langgraph %}
+{%- if cookiecutter.use_langgraph %}
     "langchain-core>=0.3.0",
 {%- if cookiecutter.use_openai %}
     "langchain-openai>=0.3.0",
@@ -130,10 +139,13 @@ dependencies = [
 {%- if cookiecutter.use_anthropic %}
     "langchain-anthropic>=0.3.0",
 {%- endif %}
+{%- if cookiecutter.use_google %}
+    "langchain-google-genai>=2.0.0",
+{%- endif %}
     "langgraph>=0.2.0",
     "langgraph-checkpoint>=2.0.0",
 {%- endif %}
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_crewai %}
+{%- if cookiecutter.use_crewai %}
     "crewai>=1.0.0",
 {%- if cookiecutter.use_openai %}
     "langchain-openai>=0.3.0",
@@ -141,14 +153,80 @@ dependencies = [
 {%- if cookiecutter.use_anthropic %}
     "langchain-anthropic>=0.3.0",
 {%- endif %}
+{%- if cookiecutter.use_google %}
+    "langchain-google-genai>=2.0.0",
 {%- endif %}
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_deepagents %}
+{%- endif %}
+{%- if cookiecutter.use_deepagents %}
     "deepagents>=0.1.0",
 {%- if cookiecutter.use_openai %}
     "langchain-openai>=0.3.0",
 {%- endif %}
 {%- if cookiecutter.use_anthropic %}
     "langchain-anthropic>=0.3.0",
+{%- endif %}
+{%- if cookiecutter.use_google %}
+    "langchain-google-genai>=2.0.0",
+{%- endif %}
+{%- endif %}
+{%- if cookiecutter.enable_rag %}
+    # Vector store
+{%- if cookiecutter.use_milvus %}
+    "pymilvus>=2.4.0",
+{%- endif %}
+{%- if cookiecutter.use_qdrant %}
+    "qdrant-client>=1.12.0",
+{%- endif %}
+{%- if cookiecutter.use_chromadb %}
+    "chromadb>=0.5.0",
+{%- endif %}
+{%- if cookiecutter.use_pgvector %}
+    # pgvector uses existing asyncpg + sqlalchemy (no extra dep needed)
+{%- endif %}
+    # Text splitting
+    "langchain-text-splitters>=0.3.0",
+    # BM25 for hybrid search
+    "rank-bm25>=0.2.2",
+{%- if cookiecutter.use_openai_embeddings %}
+    # Uses existing openai dependency
+{%- endif %}
+{%- if cookiecutter.use_voyage_embeddings %}
+    "voyageai>=0.3.0",
+{%- endif %}
+{%- if cookiecutter.use_gemini_embeddings %}
+    "google-genai>=1.0.0",
+{%- endif %}
+{%- if cookiecutter.use_sentence_transformers %}
+    "sentence-transformers>=3.0.0",
+{%- endif %}
+{%- if cookiecutter.use_cohere_reranker %}
+    "cohere>=5.0.0",
+{%- endif %}
+{%- if cookiecutter.use_cross_encoder_reranker %}
+    "sentence-transformers>=3.0.0",
+{%- endif %}
+{%- if cookiecutter.use_all_pdf_parsers %}
+    "pymupdf>=1.25.0",
+    "pillow>=10.0.0",
+    "python-docx>=1.1.0",
+    "llama-cloud>=1.0.0",
+    "liteparse>=0.1.0",
+{%- elif cookiecutter.use_llamaparse %}
+    "llama-cloud>=1.0.0",
+{%- elif cookiecutter.use_liteparse %}
+    "liteparse>=0.1.0",
+    "python-docx>=1.1.0",
+{%- else %}
+    "pymupdf>=1.25.0",
+    "pillow>=10.0.0",
+    "python-docx>=1.1.0",
+{%- endif %}
+{%- if cookiecutter.enable_google_drive_ingestion %}
+    "google-api-python-client>=2.0.0",
+    "google-auth>=2.0.0",
+{%- endif %}
+{%- if cookiecutter.enable_s3_ingestion %}
+    "boto3>=1.35.0",
 {%- endif %}
 {%- endif %}
 {%- if cookiecutter.enable_langsmith %}
@@ -159,6 +237,10 @@ dependencies = [
 {%- endif %}
     "click>=8.1.0",
     "tabulate>=0.9.0",
+    "tqdm>=4.66.0",
+{%- if cookiecutter.enable_web_search %}
+    "tavily-py>=0.5.0",
+{%- endif %}
 ]
 
 [project.optional-dependencies]
@@ -190,19 +272,23 @@ line-length = 100
 
 [tool.ruff.lint]
 select = [
-    "E",      # pycodestyle errors
-    "W",      # pycodestyle warnings
-    "F",      # pyflakes
-    "I",      # isort
-    "B",      # flake8-bugbear
-    "C4",     # flake8-comprehensions
-    "UP",     # pyupgrade
-    "SIM",    # flake8-simplify
-    "RUF",    # ruff-specific rules
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific rules
 ]
 ignore = [
-    "E501",   # line too long (handled by formatter)
-    "B008",   # function call in default argument (needed for FastAPI Depends)
+    "E501", # line too long (handled by formatter)
+    "E402", # module level import not at top (needed for conditional Jinja2 imports)
+    "B008", # function call in default argument (needed for FastAPI Depends)
+    "B905", # zip() without strict= (Python 3.10+ style, not needed)
+    "RUF012", # mutable class attribute without ClassVar (used in parser base class)
+    "RUF059", # unpacked variable never used (CLI destructuring pattern)
 ]
 
 [tool.ruff.lint.isort]
@@ -217,6 +303,25 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "app/main.py",
+    "app/core/logfire_setup.py",
+]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ ==",
+    "@overload",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]
 
 [tool.{{ cookiecutter.generator_name }}]
 generator_version = "{{ cookiecutter.generator_version }}"

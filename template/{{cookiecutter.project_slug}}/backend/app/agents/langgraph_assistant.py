@@ -1,4 +1,4 @@
-{%- if cookiecutter.enable_ai_agent and cookiecutter.use_langgraph %}
+{%- if cookiecutter.use_langgraph %}
 """LangGraph ReAct Agent implementation.
 
 A simple ReAct (Reasoning + Acting) agent built with LangGraph.
@@ -19,9 +19,21 @@ from langchain_openai import ChatOpenAI
 {%- if cookiecutter.use_anthropic %}
 from langchain_anthropic import ChatAnthropic
 {%- endif %}
+{%- if cookiecutter.use_google %}
+from langchain_google_genai import ChatGoogleGenerativeAI
+{%- endif %}
 
 from app.agents.prompts import DEFAULT_SYSTEM_PROMPT
+{%- if cookiecutter.enable_rag %}
+from app.agents.prompts import get_system_prompt_with_rag
+{%- endif %}
 from app.agents.tools import get_current_datetime
+{%- if cookiecutter.enable_web_search %}
+from app.agents.tools.web_search import web_search_sync
+{%- endif %}
+{%- if cookiecutter.enable_rag %}
+from app.agents.tools.rag_tool import search_knowledge_base_sync
+{%- endif %}
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -58,8 +70,34 @@ def current_datetime() -> str:
     return get_current_datetime()
 
 
+{%- if cookiecutter.enable_rag %}
+@tool
+def search_documents(query: str, collection: str = "documents", top_k: int = 5) -> str:
+    """Search the knowledge base for relevant documents.
+
+    Use this tool to find information from uploaded documents before answering user queries.
+    Cite sources by referring to the document filename from the search results.
+
+    Args:
+        query: The search query string.
+        collection: Name of the collection to search (default: "documents").
+        top_k: Number of top results to retrieve (default: 5).
+
+    Returns:
+        Formatted string with search results including content and scores.
+    """
+    return search_knowledge_base_sync(query=query, collection=collection, top_k=top_k)
+{%- endif %}
+
+
 # List of all available tools
 ALL_TOOLS = [current_datetime]
+{%- if cookiecutter.enable_web_search %}
+ALL_TOOLS.append(web_search_sync)
+{%- endif %}
+{%- if cookiecutter.enable_rag %}
+ALL_TOOLS.append(search_documents)
+{%- endif %}
 
 # Create a dictionary for quick tool lookup by name
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
@@ -89,7 +127,11 @@ class LangGraphAssistant:
     ):
         self.model_name = model_name or settings.AI_MODEL
         self.temperature = temperature or settings.AI_TEMPERATURE
+{%- if cookiecutter.enable_rag %}
+        self.system_prompt = system_prompt or get_system_prompt_with_rag()
+{%- else %}
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+{%- endif %}
         self._graph = None
         self._checkpointer = MemorySaver()
 
@@ -109,6 +151,13 @@ class LangGraphAssistant:
             temperature=self.temperature,
             api_key=settings.ANTHROPIC_API_KEY,
             streaming=True,
+        )
+{%- endif %}
+{%- if cookiecutter.use_google %}
+        model = ChatGoogleGenerativeAI(
+            model=self.model_name,
+            temperature=self.temperature,
+            google_api_key=settings.GOOGLE_API_KEY,
         )
 {%- endif %}
 

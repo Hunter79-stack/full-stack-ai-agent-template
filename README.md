@@ -1,7 +1,5 @@
-<h1 align="center">Full-Stack AI Agent Template</h1>
-
 <p align="center">
-  <b>Production-Ready AI/LLM Applications — In Minutes, Not Weeks</b>
+  <img src="https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/banner.png" alt="Full-Stack AI Agent Template" width="100%">
 </p>
 
 <p align="center">
@@ -9,34 +7,251 @@
   <a href="#-features">Features</a> •
   <a href="#-demo">Demo</a> •
   <a href="https://oss.vstorm.co/">Website</a> •
-  <a href="https://oss.vstorm.co/full-stack-ai-agent-template/configurator/">Configurator</a> •
+  <a href="https://oss.vstorm.co/projects/full-stack-ai-agent-template/configurator/">Configurator</a> •
   <a href="https://pypi.org/project/fastapi-fullstack/">PyPI</a> •
   <a href="#-documentation">Docs</a>
 </p>
 
 <p align="center">
   <a href="https://pypi.org/project/fastapi-fullstack/"><img src="https://img.shields.io/pypi/v/fastapi-fullstack?color=green&logo=pypi&logoColor=white" alt="PyPI"></a>
+  <a href="https://pepy.tech/projects/fastapi-fullstack"><img src="https://static.pepy.tech/badge/fastapi-fullstack" alt="PyPI Downloads"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.11+-blue?logo=python&logoColor=white" alt="Python 3.11+"></a>
   <a href="https://github.com/vstorm-co/full-stack-ai-agent-template/blob/main/LICENSE"><img src="https://img.shields.io/github/license/vstorm-co/full-stack-ai-agent-template?color=blue" alt="License"></a>
   <img src="https://img.shields.io/badge/coverage-100%25-brightgreen" alt="Coverage">
+  <a href="https://github.com/vstorm-co/full-stack-ai-agent-template/blob/main/SECURITY.md"><img src="https://img.shields.io/badge/security-policy-blueviolet?logo=shieldsdotio&logoColor=white" alt="Security Policy"></a>
   <a href="https://github.com/vstorm-co/full-stack-ai-agent-template/stargazers"><img src="https://img.shields.io/github/stars/vstorm-co/full-stack-ai-agent-template?style=flat&logo=github&color=yellow" alt="GitHub Stars"></a>
+  <a href="https://x.com/Kacper95682155"><img src="https://img.shields.io/badge/follow-%40Kacper95682155-000000?logo=x&logoColor=white" alt="Follow on X"></a>
 </p>
 
 <p align="center">
-  <b>🤖 PydanticAI</b>
-  &nbsp;•&nbsp;
-  <b>🦜 LangChain, LangGraph & DeepAgents</b>
-  &nbsp;•&nbsp;
-  <b>👥 CrewAI</b>
-  &nbsp;•&nbsp;
-  <b>🎯 Fully Type-Safe</b>
+  <b>🤖 5 AI Agent Frameworks</b> (PydanticAI, LangChain, LangGraph, CrewAI, DeepAgents)
+  <br>
+  <b>📄 RAG Pipeline</b> (Milvus, Qdrant, pgvector, ChromaDB)
+  <br>
+  <b>⚡ FastAPI + Next.js 15</b> (WebSocket streaming, real-time chat UI)
+  <br>
+  <b>🔒 Enterprise-Ready</b> (JWT, OAuth, admin panel, Celery, Docker, K8s)
 </p>
+
+<p align="center">
+  <a href="https://oss.vstorm.co/projects/full-stack-ai-agent-template/configurator/">
+    <img src="https://img.shields.io/badge/Try%20Web%20Configurator%20%E2%86%92-0066FF?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Web Configurator">
+  </a>
+  &nbsp;&nbsp;
+  <a href="#-quick-start">
+    <img src="https://img.shields.io/badge/pip%20install%20%E2%86%92-22C55E?style=for-the-badge&logo=pypi&logoColor=white" alt="Install via pip">
+  </a>
+</p>
+
+<details open>
+<summary><b>Table of Contents</b></summary>
+
+- [Quick Start](#-quick-start)
+- [Demo](#-demo)
+- [Screenshots](#-screenshots)
+- [Why This Template](#-why-this-template)
+- [Features](#-features)
+- [Architecture](#-architecture)
+- [AI Agent](#-ai-agent)
+- [RAG](#-rag-retrieval-augmented-generation)
+- [Observability](#-observability)
+- [Django-style CLI](#-django-style-cli)
+- [Generated Project Structure](#-generated-project-structure)
+- [Configuration Options](#-configuration-options)
+- [Comparison](#-comparison)
+- [FAQ](#-faq)
+- [Documentation](#-documentation)
+- [Contributing](#-contributing)
+
+</details>
 
 ---
 
 ## Related Projects
 
+> [!TIP]
 > **Building advanced AI agents?** Check out [pydantic-deepagents](https://github.com/vstorm-co/pydantic-deepagents) — a deepagent framework built on pydantic-ai for building Claude Code-style AI agents with filesystem tools, subagent delegation, persistent memory, context management, cost tracking, and an interactive CLI.
+
+---
+
+## 🚀 Quick Start
+
+> [!TIP]
+> **Prefer a visual configurator?** Use the [Web Configurator](https://oss.vstorm.co/projects/full-stack-ai-agent-template/configurator/) to configure your project in the browser and download a ZIP — no CLI installation needed.
+
+### Installation
+
+```bash
+# pip
+pip install fastapi-fullstack
+
+# uv (recommended)
+uv tool install fastapi-fullstack
+
+# pipx
+pipx install fastapi-fullstack
+```
+
+### Create Your Project
+
+```bash
+# Interactive wizard (recommended — runs by default)
+fastapi-fullstack
+
+# Quick mode with options
+fastapi-fullstack create my_ai_app \
+  --database postgresql \
+  --frontend nextjs
+
+# Use presets for common setups
+fastapi-fullstack create my_ai_app --preset production   # Full production setup
+fastapi-fullstack create my_ai_app --preset ai-agent     # AI agent with streaming
+
+# Minimal project (no extras)
+fastapi-fullstack create my_ai_app --minimal
+```
+
+### Start Development
+
+After generating your project, follow these steps:
+
+#### 1. Install dependencies
+
+```bash
+cd my_ai_app
+make install
+```
+
+> [!NOTE]
+> **Windows Users:** The `make` command requires GNU Make which is not available by default on Windows.
+> Install via [Chocolatey](https://chocolatey.org/) (`choco install make`), use WSL, or run raw commands manually.
+> Each generated project includes a "Manual Commands Reference" section in its README with all commands.
+
+#### 2. Start the database
+
+```bash
+# PostgreSQL (with Docker)
+make docker-db
+```
+
+#### 3. Create and apply database migrations
+
+> [!WARNING]
+> Both commands are required! `db-migrate` creates the migration file, `db-upgrade` applies it to the database.
+
+```bash
+# Create initial migration (REQUIRED first time)
+make db-migrate
+# Enter message: "Initial migration"
+
+# Apply migrations to create tables
+make db-upgrade
+```
+
+#### 4. Create admin user
+
+```bash
+make create-admin
+# Enter email and password when prompted
+```
+
+#### 5. Start the backend
+
+```bash
+make run
+```
+
+#### 6. Start the frontend (new terminal)
+
+```bash
+cd frontend
+bun install
+bun dev
+```
+
+**Access:**
+
+- API: <http://localhost:8000>
+- Docs: <http://localhost:8000/docs>
+- Admin Panel: <http://localhost:8000/admin> (login with admin user)
+- Frontend: <http://localhost:3000>
+
+### Quick Start with Docker
+
+Run everything in Docker:
+
+```bash
+make docker-up       # Start backend + database
+make docker-frontend # Start frontend
+```
+
+### Using the Project CLI
+
+Each generated project has a CLI named after your `project_slug`. For example, if you created `my_ai_app`:
+
+```bash
+cd backend
+
+# The CLI command is: uv run <project_slug> <command>
+uv run my_ai_app server run --reload     # Start dev server
+uv run my_ai_app db migrate -m "message" # Create migration
+uv run my_ai_app db upgrade              # Apply migrations
+uv run my_ai_app user create-admin       # Create admin user
+```
+
+Use `make help` to see all available Makefile shortcuts.
+
+---
+
+## 🎬 Demo
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/app_start.gif" alt="FastAPI Fullstack Generator Demo">
+</p>
+
+---
+
+## 📸 Screenshots
+
+### Landing Page & Dashboard
+
+| Landing Page | Dashboard |
+|:---:|:---:|
+| ![Landing Page](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/landingpage.png) | ![Dashboard](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/dashboard.png) |
+
+### Chat Interface
+
+| Chat with RAG |
+|:---:|
+| ![Chat with RAG](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/chatwithrag.png) |
+
+### Knowledge Base (RAG)
+
+| Documents | Search |
+|:---:|:---:|
+| ![RAG Documents](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/ragdocuments.png) | ![RAG Search](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/ragsearch.png) |
+
+### Authentication
+
+| Login |
+|:---:|
+| ![Login](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/login.png) |
+
+### Observability
+
+| Logfire (PydanticAI) | LangSmith (LangChain) |
+|:---:|:---:|
+| ![Logfire](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/logfire.png) | ![LangSmith](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/langsmith.png) |
+
+### Admin, Monitoring & API
+
+| Celery Flower | SQLAdmin Panel |
+|:---:|:---:|
+| ![Flower](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/flower.png) | ![Admin](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/admin.png) |
+
+| API Documentation |
+|:---:|
+| ![API Docs](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/docs_2.png) |
 
 ---
 
@@ -72,8 +287,10 @@ Generated projects include **CLAUDE.md** and **AGENTS.md** files optimized for A
   <a href="https://python.langchain.com"><img src="https://img.shields.io/badge/LangChain-1C3C3C?logo=langchain&logoColor=white" alt="LangChain"></a>
   <a href="https://langchain-ai.github.io/langgraph/"><img src="https://img.shields.io/badge/LangGraph-005A9C?logo=langchain&logoColor=white" alt="LangGraph"></a>
   <a href="https://www.crewai.com"><img src="https://img.shields.io/badge/CrewAI-FF6B35?logoColor=white" alt="CrewAI"></a>
+  <a href="https://milvus.io"><img src="https://img.shields.io/badge/Milvus-FF6B35?logoColor=white" alt="Milvus"></a>
   <a href="https://openai.com"><img src="https://img.shields.io/badge/OpenAI-412991?logo=openai&logoColor=white" alt="OpenAI"></a>
   <a href="https://anthropic.com"><img src="https://img.shields.io/badge/Anthropic-D4A373?logo=anthropic&logoColor=white" alt="Anthropic"></a>
+  <a href="https://ai.google.dev"><img src="https://img.shields.io/badge/Gemini-4285F4?logo=google&logoColor=white" alt="Google Gemini"></a>
   <a href="https://openrouter.ai"><img src="https://img.shields.io/badge/OpenRouter-6366F1?logoColor=white" alt="OpenRouter"></a>
 </p>
 
@@ -90,6 +307,9 @@ Generated projects include **CLAUDE.md** and **AGENTS.md** files optimized for A
   <a href="https://www.postgresql.org"><img src="https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL"></a>
   <a href="https://www.mongodb.com"><img src="https://img.shields.io/badge/MongoDB-47A248?logo=mongodb&logoColor=white" alt="MongoDB"></a>
   <a href="https://redis.io"><img src="https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white" alt="Redis"></a>
+  <a href="https://milvus.io"><img src="https://img.shields.io/badge/Milvus-00A1EA?logoColor=white" alt="Milvus"></a>
+  <a href="https://qdrant.tech"><img src="https://img.shields.io/badge/Qdrant-FF6B6B?logoColor=white" alt="Qdrant"></a>
+  <a href="https://www.trychroma.com"><img src="https://img.shields.io/badge/ChromaDB-FF6F61?logoColor=white" alt="ChromaDB"></a>
   <a href="https://docs.celeryq.dev"><img src="https://img.shields.io/badge/Celery-37814A?logo=celery&logoColor=white" alt="Celery"></a>
   <a href="https://logfire.pydantic.dev"><img src="https://img.shields.io/badge/Logfire-E92063?logo=pydantic&logoColor=white" alt="Logfire"></a>
   <a href="https://sentry.io"><img src="https://img.shields.io/badge/Sentry-362D59?logo=sentry&logoColor=white" alt="Sentry"></a>
@@ -105,12 +325,16 @@ Generated projects include **CLAUDE.md** and **AGENTS.md** files optimized for A
 
 ### 🤖 AI/LLM First
 
-- **[PydanticAI](https://ai.pydantic.dev)** or **[LangChain](https://python.langchain.com)** - Choose your preferred AI framework
+- **5 AI Frameworks** - [PydanticAI](https://ai.pydantic.dev), [LangChain](https://python.langchain.com), [LangGraph](https://langchain-ai.github.io/langgraph/), [CrewAI](https://www.crewai.com), [DeepAgents](https://github.com/vstorm-co/pydantic-deepagents)
+- **4 LLM Providers** - OpenAI, Anthropic, Google Gemini, OpenRouter
+- **RAG** - Document ingestion, vector search, reranking (Milvus, Qdrant, ChromaDB, pgvector)
 - **WebSocket Streaming** - Real-time responses with full event access
 - **Conversation Persistence** - Save chat history to database
-- **Custom Tools** - Easily extend agent capabilities
-- **Multi-provider Support** - OpenAI, Anthropic, OpenRouter
-- **Observability** - Logfire for PydanticAI, LangSmith for LangChain
+- **Image Description** - Extract images from documents, describe via LLM vision
+- **Multimodal Embeddings** - Google Gemini embedding model (text + images)
+- **Document Sources** - Local files, API upload, Google Drive, S3/MinIO
+- **Sync Sources** - Configurable connectors (Google Drive, S3) with scheduled sync
+- **Observability** - Logfire for PydanticAI, LangSmith for LangChain/LangGraph/DeepAgents
 
 ### ⚡ Backend (FastAPI)
 
@@ -125,13 +349,17 @@ Generated projects include **CLAUDE.md** and **AGENTS.md** files optimized for A
 - **React 19** + **TypeScript** + **Tailwind CSS v4**
 - **AI Chat Interface** - WebSocket streaming, tool call visualization
 - **Authentication** - HTTP-only cookies, auto-refresh
-- **Dark Mode** + **i18n** (optional)
+- **Dark Mode** + **i18n**
 
 ### 🔌 20+ Enterprise Integrations
 
 | Category | Integrations |
 |----------|-------------|
-| **AI Frameworks** | PydanticAI, LangChain |
+| **AI Frameworks** | PydanticAI, LangChain, LangGraph, CrewAI, DeepAgents |
+| **LLM Providers** | OpenAI, Anthropic, Google Gemini, OpenRouter |
+| **RAG / Vector Stores** | Milvus, Qdrant, ChromaDB, pgvector |
+| **RAG Sources** | Local files, API upload, Google Drive, S3/MinIO, Sync Sources (configurable, scheduled) |
+| **Embeddings** | OpenAI, Voyage, Gemini (multimodal), SentenceTransformers |
 | **Caching & State** | Redis, fastapi-cache2 |
 | **Security** | Rate limiting, CORS, CSRF protection |
 | **Observability** | Logfire, LangSmith, Sentry, Prometheus |
@@ -139,167 +367,57 @@ Generated projects include **CLAUDE.md** and **AGENTS.md** files optimized for A
 | **Events** | Webhooks, WebSockets |
 | **DevOps** | Docker, GitHub Actions, GitLab CI, Kubernetes |
 
----
+### 🗺️ Architecture Overview
 
-## 🎬 Demo
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/app_start.gif" alt="FastAPI Fullstack Generator Demo">
-</p>
-
----
-
-## 📸 Screenshots
-
-### Chat Interface
-| Light Mode | Dark Mode |
-|:---:|:---:|
-| ![Chat Light](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/new_chat_light.png) | ![Chat Dark](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/new_chat_dark.png) |
-
-### Authentication
-| Register | Login |
-|:---:|:---:|
-| ![Register](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/new_register.png) | ![Login](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/new_login.png) |
-
-### Observability
-| Logfire (PydanticAI) | LangSmith (LangChain) |
-|:---:|:---:|
-| ![Logfire](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/logfire.png) | ![LangSmith](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/langsmith.png) |
-
-### Admin, Monitoring & API
-| Celery Flower | SQLAdmin Panel |
-|:---:|:---:|
-| ![Flower](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/flower.png) | ![Admin](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/admin.png) |
-
-| API Documentation |
-|:---:|
-| ![API Docs](https://raw.githubusercontent.com/vstorm-co/full-stack-ai-agent-template/main/assets/docs_2.png) |
-
----
-
-## 🚀 Quick Start
-
-> **Prefer a visual configurator?** Use the [Web Configurator](https://oss.vstorm.co/full-stack-ai-agent-template/configurator/) to configure your project in the browser and download a ZIP — no CLI installation needed.
-
-### Installation
-
-```bash
-# pip
-pip install fastapi-fullstack
-
-# uv (recommended)
-uv tool install fastapi-fullstack
-
-# pipx
-pipx install fastapi-fullstack
 ```
-
-### Create Your Project
-
-```bash
-# Interactive wizard (recommended — runs by default)
-fastapi-fullstack
-
-# Quick mode with options
-fastapi-fullstack create my_ai_app \
-  --database postgresql \
-  --auth jwt \
-  --frontend nextjs
-
-# Use presets for common setups
-fastapi-fullstack create my_ai_app --preset production   # Full production setup
-fastapi-fullstack create my_ai_app --preset ai-agent     # AI agent with streaming
-
-# Minimal project (no extras)
-fastapi-fullstack create my_ai_app --minimal
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         FRONTEND  (Next.js 15)                           │
+│  Chat UI · Knowledge Base · Dashboard · Settings · Dark Mode · i18n      │
+└──────────────┬───────────────────────────────────────────┬───────────────┘
+               │  REST / WebSocket                         │  Vercel
+               ▼                                           ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         BACKEND  (FastAPI)                               │
+│                                                                          │
+│  ┌─────────────────────────────────────────────────────────────────┐     │
+│  │                     AI AGENTS                                   │     │
+│  │  PydanticAI · LangChain · LangGraph · CrewAI · DeepAgents       │     │
+│  │  ────────────────────────────────────────────────────────────   │     │
+│  │  Tools: datetime · web_search (Tavily) · search_knowledge_base  │     │
+│  │  Providers: OpenAI · Anthropic · Gemini · OpenRouter            │     │
+│  └─────────────────────────────────────────────────────────────────┘     │
+│                                                                          │
+│  ┌─────────────────────────────────────────────────────────────────┐     │
+│  │                     RAG PIPELINE                                │     │
+│  │                                                                 │     │
+│  │  Sources        Parse           Chunk          Embed            │     │
+│  │  ─────────      ──────────      ──────────     ──────────────   │     │
+│  │  Local files    PyMuPDF         recursive      OpenAI           │     │
+│  │  API upload     LiteParse       markdown       Voyage           │     │
+│  │  Google Drive   LlamaParse      fixed          Gemini (multi)   │     │
+│  │  S3/MinIO       python-docx                    SentenceTransf.  │     │
+│  │  Sync Sources                                                   │     │
+│  │                                                                 │     │
+│  │  Store              Search              Rank                    │     │
+│  │  ──────────────     ──────────────      ──────────────          │     │
+│  │  Milvus             Vector similarity   Cohere reranker         │     │
+│  │  Qdrant             BM25 + vector RRF   CrossEncoder            │     │
+│  │  ChromaDB           Multi-collection                            │     │
+│  │  pgvector                                                       │     │
+│  └─────────────────────────────────────────────────────────────────┘     │
+│                                                                          │
+│  Auth (JWT/API Key/OAuth) · Rate Limiting · Webhooks · Admin Panel       │
+│  Background Tasks (Celery/Taskiq/ARQ) · Django-style CLI                 │
+│  Observability (Logfire/LangSmith/Sentry/Prometheus)                     │
+└───────┬──────────────┬──────────────┬──────────────┬─────────────────────┘
+        │              │              │              │
+        ▼              ▼              ▼              ▼
+   PostgreSQL       Redis         Vector DB      LLM APIs
+   MongoDB                        (Milvus/       (OpenAI/
+   SQLite                         Qdrant/        Anthropic/
+                                  ChromaDB/      Gemini)
+                                  pgvector)
 ```
-
-### Start Development
-
-After generating your project, follow these steps:
-
-#### 1. Install dependencies
-
-```bash
-cd my_ai_app
-make install
-```
-
-> **Windows Users:** The `make` command requires GNU Make which is not available by default on Windows.
-> Install via [Chocolatey](https://chocolatey.org/) (`choco install make`), use WSL, or run raw commands manually.
-> Each generated project includes a "Manual Commands Reference" section in its README with all commands.
-
-#### 2. Start the database
-
-```bash
-# PostgreSQL (with Docker)
-make docker-db
-```
-
-#### 3. Create and apply database migrations
-
-> ⚠️ **Important:** Both commands are required! `db-migrate` creates the migration file, `db-upgrade` applies it to the database.
-
-```bash
-# Create initial migration (REQUIRED first time)
-make db-migrate
-# Enter message: "Initial migration"
-
-# Apply migrations to create tables
-make db-upgrade
-```
-
-#### 4. Create admin user
-
-```bash
-make create-admin
-# Enter email and password when prompted
-```
-
-#### 5. Start the backend
-
-```bash
-make run
-```
-
-#### 6. Start the frontend (new terminal)
-
-```bash
-cd frontend
-bun install
-bun dev
-```
-
-**Access:**
-- API: http://localhost:8000
-- Docs: http://localhost:8000/docs
-- Admin Panel: http://localhost:8000/admin (login with admin user)
-- Frontend: http://localhost:3000
-
-### Quick Start with Docker
-
-Run everything in Docker:
-
-```bash
-make docker-up       # Start backend + database
-make docker-frontend # Start frontend
-```
-
-### Using the Project CLI
-
-Each generated project has a CLI named after your `project_slug`. For example, if you created `my_ai_app`:
-
-```bash
-cd backend
-
-# The CLI command is: uv run <project_slug> <command>
-uv run my_ai_app server run --reload     # Start dev server
-uv run my_ai_app db migrate -m "message" # Create migration
-uv run my_ai_app db upgrade              # Apply migrations
-uv run my_ai_app user create-admin       # Create admin user
-```
-
-Use `make help` to see all available Makefile shortcuts.
 
 ---
 
@@ -369,31 +487,34 @@ See [Architecture Documentation](https://github.com/vstorm-co/full-stack-ai-agen
 
 ## 🤖 AI Agent
 
-Choose between **PydanticAI** or **LangChain** when generating your project, with support for multiple LLM providers:
+Choose from **5 AI frameworks** and **4 LLM providers** when generating your project:
 
 ```bash
 # PydanticAI with OpenAI (default)
-fastapi-fullstack create my_app --ai-agent --ai-framework pydantic_ai
+fastapi-fullstack create my_app --ai-framework pydantic_ai
 
-# PydanticAI with Anthropic
-fastapi-fullstack create my_app --ai-agent --ai-framework pydantic_ai --llm-provider anthropic
+# LangGraph with Anthropic
+fastapi-fullstack create my_app --ai-framework langgraph --llm-provider anthropic
 
-# PydanticAI with OpenRouter
-fastapi-fullstack create my_app --ai-agent --ai-framework pydantic_ai --llm-provider openrouter
+# CrewAI with Google Gemini
+fastapi-fullstack create my_app --ai-framework crewai --llm-provider google
 
-# LangChain with OpenAI
-fastapi-fullstack create my_app --ai-agent --ai-framework langchain
+# DeepAgents with OpenAI
+fastapi-fullstack create my_app --ai-framework deepagents
 
-# LangChain with Anthropic
-fastapi-fullstack create my_app --ai-agent --ai-framework langchain --llm-provider anthropic
+# With RAG enabled
+fastapi-fullstack create my_app --rag --database postgresql --task-queue celery
 ```
 
-### Supported LLM Providers
+### Supported Combinations
 
-| Framework | OpenAI | Anthropic | OpenRouter |
-|-----------|:------:|:---------:|:----------:|
-| **PydanticAI** | ✓ | ✓ | ✓ |
-| **LangChain** | ✓ | ✓ | - |
+| Framework | OpenAI | Anthropic | Gemini | OpenRouter |
+|-----------|:------:|:---------:|:------:|:----------:|
+| **PydanticAI** | ✓ | ✓ | ✓ | ✓ |
+| **LangChain** | ✓ | ✓ | ✓ | - |
+| **LangGraph** | ✓ | ✓ | ✓ | - |
+| **CrewAI** | ✓ | ✓ | ✓ | - |
+| **DeepAgents** | ✓ | ✓ | ✓ | - |
 
 ### PydanticAI Integration
 
@@ -468,6 +589,52 @@ Each framework has its own observability solution:
 | **LangChain** | [LangSmith](https://smith.langchain.com) | Traces, feedback, datasets |
 
 See [AI Agent Documentation](https://github.com/vstorm-co/full-stack-ai-agent-template/blob/main/docs/ai-agent.md) for more.
+
+---
+
+## 📄 RAG (Retrieval-Augmented Generation)
+
+Enable RAG to give your AI agents access to a knowledge base built from your documents.
+
+### Vector Store Backends
+
+| Backend | Type | Docker Required | Best For |
+|---------|------|:---:|---------|
+| **Milvus** | Dedicated vector DB | Yes (3 services) | Production, large scale |
+| **Qdrant** | Dedicated vector DB | Yes (1 service) | Production, simple setup |
+| **ChromaDB** | Embedded / HTTP | No | Development, prototyping |
+| **pgvector** | PostgreSQL extension | No (uses existing PG) | Already have PostgreSQL |
+
+### Document Ingestion (CLI)
+
+```bash
+# Local files
+uv run my_app rag-ingest /path/to/document.pdf --collection docs
+uv run my_app rag-ingest /path/to/folder/ --recursive
+
+# Google Drive (service account)
+uv run my_app rag-sync-gdrive --collection docs --folder-id <drive_folder_id>
+
+# S3/MinIO
+uv run my_app rag-sync-s3 --collection docs --prefix reports/ --bucket my-bucket
+```
+
+### Embedding Providers
+
+| Provider | Model | Dimensions | Multimodal |
+|----------|-------|:---:|:---:|
+| **OpenAI** | text-embedding-3-small | 1536 | - |
+| **Voyage** | voyage-3 | 1024 | - |
+| **Gemini** | gemini-embedding-exp-03-07 | 3072 | Text + Images |
+| **SentenceTransformers** | all-MiniLM-L6-v2 | 384 | - |
+
+### Features
+
+- **Document parsing** - PDF (PyMuPDF with tables, headers/footers, OCR), DOCX, TXT, MD + 130+ formats via LlamaParse
+- **Image description** - Extract images from documents, describe via LLM vision API (opt-in)
+- **Chunking** - RecursiveCharacterTextSplitter with configurable size/overlap
+- **Reranking** - Cohere API or local CrossEncoder for improved search quality
+- **Agent integration** - All 5 AI frameworks get a `search_knowledge_base` tool automatically
 
 ---
 
@@ -639,6 +806,7 @@ my_project/
 │   │   ├── repositories/        # Data access layer
 │   │   ├── services/            # Business logic
 │   │   ├── agents/              # AI agents with centralized prompts
+│   │   ├── rag/                 # RAG module (vector store, embeddings, ingestion)
 │   │   ├── commands/            # Django-style CLI commands
 │   │   └── worker/              # Background tasks
 │   ├── cli/                     # Project CLI
@@ -676,8 +844,10 @@ generated_at = "2024-12-21T10:30:00+00:00"
 | **ORM** | `sqlalchemy`, `sqlmodel` | SQLModel for simplified syntax |
 | **Auth** | `jwt`, `api_key`, `both`, `none` | JWT includes user management |
 | **OAuth** | `none`, `google` | Social login |
-| **AI Framework** | `pydantic_ai`, `langchain` | Choose your AI agent framework |
-| **LLM Provider** | `openai`, `anthropic`, `openrouter` | OpenRouter only with PydanticAI |
+| **AI Framework** | `pydantic_ai`, `langchain`, `langgraph`, `crewai`, `deepagents` | Choose your AI agent framework |
+| **LLM Provider** | `openai`, `anthropic`, `google`, `openrouter` | OpenRouter only with PydanticAI |
+| **RAG** | `--rag` | Enable RAG with vector database |
+| **Vector Store** | `milvus`, `qdrant`, `chromadb`, `pgvector` | pgvector uses existing PostgreSQL |
 | **Background Tasks** | `none`, `celery`, `taskiq`, `arq` | Distributed queues |
 | **Frontend** | `none`, `nextjs` | Next.js 15 + React 19 |
 
@@ -706,6 +876,93 @@ fastapi-fullstack new
 # ✓ Prometheus
 # ... and more
 ```
+
+---
+
+## 🔄 Comparison
+
+### vs. Manual Setup
+
+Setting up a production AI agent stack manually means wiring together 10+ tools yourself:
+
+```bash
+# Without this template, you'd need to manually:
+# 1. Set up FastAPI project structure
+# 2. Configure SQLAlchemy + Alembic migrations
+# 3. Implement JWT auth with refresh tokens
+# 4. Build WebSocket streaming for AI responses
+# 5. Integrate PydanticAI/LangChain with tool calling
+# 6. Set up RAG pipeline (parsing, chunking, embedding, vector store)
+# 7. Configure Celery + Redis for background tasks
+# 8. Build Next.js frontend with auth and chat UI
+# 9. Write Docker Compose for all services
+# 10. Add observability, rate limiting, admin panel...
+
+# With this template:
+pip install fastapi-fullstack
+fastapi-fullstack
+# Done. All of the above, configured and working.
+```
+
+### vs. Alternatives
+
+| Feature | **This Template** | [full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template) | [create-t3-app](https://github.com/t3-oss/create-t3-app) |
+|---------|:-:|:-:|:-:|
+| **AI Agents** (5 frameworks) | ✅ | ❌ | ❌ |
+| **RAG Pipeline** (4 vector stores) | ✅ | ❌ | ❌ |
+| **WebSocket Streaming** | ✅ | ❌ | ❌ |
+| **Conversation Persistence** | ✅ | ❌ | ❌ |
+| **LLM Observability** (Logfire/LangSmith) | ✅ | ❌ | ❌ |
+| **FastAPI Backend** | ✅ | ✅ | ❌ |
+| **Next.js Frontend** | ✅ (v15) | ❌ | ✅ |
+| **JWT + OAuth Authentication** | ✅ | ✅ | ✅ (NextAuth) |
+| **Background Tasks** (Celery/Taskiq/ARQ) | ✅ | ✅ (Celery) | ❌ |
+| **Admin Panel** | ✅ (SQLAdmin) | ❌ | ❌ |
+| **Multiple Databases** (PG/Mongo/SQLite) | ✅ | PostgreSQL only | Prisma |
+| **Docker + K8s** | ✅ | ✅ | ❌ |
+| **Interactive CLI Wizard** | ✅ | ❌ | ✅ |
+| **Django-style Commands** | ✅ | ❌ | ❌ |
+| **Document Sources** (GDrive, S3, API) | ✅ | ❌ | ❌ |
+| **AI-Agent Friendly** (CLAUDE.md) | ✅ | ❌ | ❌ |
+
+---
+
+## ❓ FAQ
+
+<details>
+<summary><b>How is this different from full-stack-fastapi-template?</b></summary>
+
+[full-stack-fastapi-template](https://github.com/fastapi/full-stack-fastapi-template) by @tiangolo is a great starting point for FastAPI projects, but it focuses on traditional web apps. This template is purpose-built for **AI/LLM applications** — it adds AI agents (5 frameworks), RAG with 4 vector stores, WebSocket streaming, conversation persistence, LLM observability, and a Next.js chat UI out of the box.
+
+</details>
+
+<details>
+<summary><b>Can I use this without AI/LLM features?</b></summary>
+
+Yes. The AI agent and RAG modules are optional. You can use this as a pure FastAPI + Next.js template with auth, admin panel, background tasks, and all other infrastructure — just skip the AI framework selection during setup.
+
+</details>
+
+<details>
+<summary><b>What Python and Node.js versions are required?</b></summary>
+
+Python 3.11+ and Node.js 18+ (for the Next.js frontend). We recommend using [uv](https://docs.astral.sh/uv/) for Python and [bun](https://bun.sh) for the frontend.
+
+</details>
+
+<details>
+<summary><b>Can I add integrations after project generation?</b></summary>
+
+The generated project is plain code — no lock-in or runtime dependency on the generator. You can add, remove, or modify any integration manually. The template just gives you a well-structured starting point.
+
+</details>
+
+<details>
+<summary><b>Can I use a different LLM provider than the one I selected?</b></summary>
+
+Yes. The LLM provider is configured via environment variables (`AI_MODEL`, `OPENAI_API_KEY`, etc.). You can switch providers by changing the `.env` file and the model name — no code changes needed for PydanticAI (which supports all providers natively).
+
+</details>
 
 ---
 
@@ -743,6 +1000,10 @@ This project is inspired by:
 ## 🤝 Contributing
 
 Contributions are welcome! Please read our [Contributing Guide](https://github.com/vstorm-co/full-stack-ai-agent-template/blob/main/CONTRIBUTING.md) for details.
+
+<a href="https://github.com/vstorm-co/full-stack-ai-agent-template/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=vstorm-co/full-stack-ai-agent-template" alt="Contributors" />
+</a>
 
 ---
 

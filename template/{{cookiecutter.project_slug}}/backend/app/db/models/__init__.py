@@ -12,17 +12,21 @@ from app.db.models.user import User
 {%- set _ = models.append("Session") %}
 from app.db.models.session import Session
 {%- endif %}
-{%- if cookiecutter.include_example_crud %}
-{%- set _ = models.append("Item") %}
-from app.db.models.item import Item
-{%- endif %}
-{%- if cookiecutter.enable_conversation_persistence %}
 {%- set _ = models.extend(["Conversation", "Message", "ToolCall"]) %}
 from app.db.models.conversation import Conversation, Message, ToolCall
-{%- endif %}
 {%- if cookiecutter.enable_webhooks %}
 {%- set _ = models.extend(["Webhook", "WebhookDelivery"]) %}
 from app.db.models.webhook import Webhook, WebhookDelivery
+{%- endif %}
+{%- set _ = models.append("ChatFile") %}
+from app.db.models.chat_file import ChatFile
+{%- if cookiecutter.enable_rag %}
+{%- set _ = models.append("RAGDocument") %}
+from app.db.models.rag_document import RAGDocument
+{%- set _ = models.append("SyncLog") %}
+from app.db.models.sync_log import SyncLog
+{%- set _ = models.append("SyncSource") %}
+from app.db.models.sync_source import SyncSource
 {%- endif %}
 {%- if models %}
 

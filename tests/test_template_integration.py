@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 
 from fastapi_gen.config import (
-    AuthType,
     BackgroundTaskType,
     CIType,
     DatabaseType,
@@ -27,12 +26,11 @@ def generated_project_minimal(tmp_path: Path) -> Path:
     """Generate a minimal project for testing."""
     config = ProjectConfig(
         project_name="test_minimal",
-        database=DatabaseType.NONE,
-        auth=AuthType.NONE,
+        database=DatabaseType.SQLITE,
         enable_logfire=False,
         enable_docker=False,
-        enable_ai_agent=False,
         ci_type=CIType.NONE,
+        background_tasks=BackgroundTaskType.NONE,
     )
     return generate_project(config, tmp_path)
 
@@ -46,7 +44,6 @@ def generated_project_full(tmp_path: Path) -> Path:
         author_name="Test Author",
         author_email="test@example.com",
         database=DatabaseType.POSTGRESQL,
-        auth=AuthType.JWT,
         oauth_provider=OAuthProvider.GOOGLE,
         enable_session_management=True,
         enable_logfire=True,
@@ -67,7 +64,6 @@ def generated_project_full(tmp_path: Path) -> Path:
         enable_admin_panel=True,
         enable_websockets=True,
         enable_file_storage=True,
-        enable_ai_agent=True,
         enable_webhooks=True,
         enable_cors=True,
         enable_orjson=True,
@@ -77,7 +73,6 @@ def generated_project_full(tmp_path: Path) -> Path:
         enable_docker=True,
         ci_type=CIType.GITHUB,
         enable_kubernetes=True,
-        include_example_crud=True,
         frontend=FrontendType.NONE,
     )
     return generate_project(config, tmp_path)
@@ -142,13 +137,13 @@ class TestGeneratedTemplateMypy:
 
 
 class TestGeneratedTemplateAgentsFolder:
-    """Test that agents folder is conditionally created based on enable_ai_agent."""
+    """Test that agents folder is always created since AI agent is always enabled."""
 
     @pytest.mark.slow
-    def test_agents_folder_not_created_when_disabled(self, generated_project_minimal: Path) -> None:
-        """Test that agents folder is not present when AI agent is disabled."""
+    def test_agents_folder_created_in_minimal(self, generated_project_minimal: Path) -> None:
+        """Test that agents folder exists in minimal project (AI agent is always enabled)."""
         agents_path = generated_project_minimal / "backend" / "app" / "agents"
-        assert not agents_path.exists(), "agents/ folder should not exist when AI is disabled"
+        assert agents_path.exists(), "agents/ folder should exist since AI agent is always enabled"
 
     @pytest.mark.slow
     def test_agents_folder_created_when_enabled(self, generated_project_full: Path) -> None:
@@ -157,14 +152,6 @@ class TestGeneratedTemplateAgentsFolder:
         assert agents_path.exists(), "agents/ folder should exist when AI is enabled"
         assert (agents_path / "__init__.py").exists()
         assert (agents_path / "assistant.py").exists()
-
-    @pytest.mark.slow
-    def test_agent_route_not_created_when_disabled(self, generated_project_minimal: Path) -> None:
-        """Test that agent API route is not present when AI agent is disabled."""
-        agent_route = (
-            generated_project_minimal / "backend" / "app" / "api" / "routes" / "v1" / "agent.py"
-        )
-        assert not agent_route.exists(), "agent.py route should not exist when AI is disabled"
 
 
 class TestGeneratedTemplateSyntax:

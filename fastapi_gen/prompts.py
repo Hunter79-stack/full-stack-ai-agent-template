@@ -9,10 +9,9 @@ from rich.panel import Panel
 from rich.text import Text
 
 from .config import (
-    AdminEnvironmentType,
     AIFrameworkType,
-    AuthType,
     BackgroundTaskType,
+    BrandColorType,
     CIType,
     DatabaseType,
     FrontendType,
@@ -20,10 +19,13 @@ from .config import (
     LogfireFeatures,
     OAuthProvider,
     OrmType,
+    PdfParserType,
     ProjectConfig,
+    RAGFeatures,
     RateLimitStorageType,
+    RerankerType,
     ReverseProxyType,
-    WebSocketAuthType,
+    VectorStoreType,
 )
 
 console = Console()
@@ -88,6 +90,7 @@ def prompt_basic_info() -> dict[str, str]:
     raw_project_name = _check_cancelled(
         questionary.text(
             "Project name:",
+            default="ai-agent",
             validate=_validate_project_name,
         ).ask()
     )
@@ -120,11 +123,19 @@ def prompt_basic_info() -> dict[str, str]:
         ).ask()
     )
 
+    timezone = _check_cancelled(
+        questionary.text(
+            "Timezone (IANA format):",
+            default="UTC",
+        ).ask()
+    )
+
     return {
         "project_name": project_name,
         "project_description": project_description,
         "author_name": author_name,
         "author_email": author_email,
+        "timezone": timezone,
     }
 
 
@@ -138,7 +149,6 @@ def prompt_database() -> DatabaseType:
         questionary.Choice("PostgreSQL (async - asyncpg)", value=DatabaseType.POSTGRESQL),
         questionary.Choice("MongoDB (async - motor)", value=DatabaseType.MONGODB),
         questionary.Choice("SQLite (sync)", value=DatabaseType.SQLITE),
-        questionary.Choice("None", value=DatabaseType.NONE),
     ]
 
     return cast(
@@ -171,31 +181,6 @@ def prompt_orm_type() -> OrmType:
         _check_cancelled(
             questionary.select(
                 "ORM Library:",
-                choices=choices,
-                default=choices[0],
-            ).ask()
-        ),
-    )
-
-
-def prompt_auth() -> AuthType:
-    """Prompt for authentication method."""
-    console.print()
-    console.print("[bold cyan]Authentication[/]")
-    console.print()
-
-    choices = [
-        questionary.Choice("JWT + User Management", value=AuthType.JWT),
-        questionary.Choice("API Key (header-based)", value=AuthType.API_KEY),
-        questionary.Choice("Both (JWT + API Key fallback)", value=AuthType.BOTH),
-        questionary.Choice("None", value=AuthType.NONE),
-    ]
-
-    return cast(
-        AuthType,
-        _check_cancelled(
-            questionary.select(
-                "Select auth method:",
                 choices=choices,
                 default=choices[0],
             ).ask()
@@ -282,10 +267,12 @@ def prompt_background_tasks() -> BackgroundTaskType:
     console.print()
 
     choices = [
-        questionary.Choice("None (use FastAPI BackgroundTasks)", value=BackgroundTaskType.NONE),
         questionary.Choice("Celery (classic, battle-tested)", value=BackgroundTaskType.CELERY),
         questionary.Choice("Taskiq (async-native, modern)", value=BackgroundTaskType.TASKIQ),
         questionary.Choice("ARQ (lightweight async Redis)", value=BackgroundTaskType.ARQ),
+        questionary.Choice(
+            "None (use FastAPI BackgroundTasks only)", value=BackgroundTaskType.NONE
+        ),
     ]
 
     return cast(
@@ -350,7 +337,7 @@ def prompt_integrations(
     ):
         choices.append(
             questionary.Choice(
-                "Admin Panel (SQLAdmin) — web UI for database management",
+                "SQL Admin Panel (SQLAdmin) — web UI for browsing/editing database tables",
                 value="admin_panel",
             )
         )
@@ -358,17 +345,8 @@ def prompt_integrations(
     choices.extend(
         [
             questionary.Choice(
-                "WebSockets — real-time bidirectional communication",
-                value="websockets",
-            ),
-            questionary.Choice(
                 "File Storage (S3/MinIO) — file upload/download support",
                 value="file_storage",
-            ),
-            questionary.Choice(
-                "AI Agent (PydanticAI/LangGraph/CrewAI) — LLM-powered assistant",
-                value="ai_agent",
-                checked=True,
             ),
         ]
     )
@@ -384,11 +362,6 @@ def prompt_integrations(
 
     choices.extend(
         [
-            questionary.Choice(
-                "Example CRUD (Item model) — sample API endpoints",
-                value="example_crud",
-                checked=True,
-            ),
             questionary.Choice(
                 "CORS middleware — cross-origin request support",
                 value="cors",
@@ -422,11 +395,8 @@ def prompt_integrations(
         "enable_sentry": "sentry" in features,
         "enable_prometheus": "prometheus" in features,
         "enable_admin_panel": "admin_panel" in features,
-        "enable_websockets": "websockets" in features,
         "enable_file_storage": "file_storage" in features,
-        "enable_ai_agent": "ai_agent" in features,
         "enable_webhooks": "webhooks" in features,
-        "include_example_crud": "example_crud" in features,
         "enable_cors": "cors" in features,
         "enable_orjson": "orjson" in features,
     }
@@ -475,25 +445,10 @@ def prompt_rate_limit_config(redis_enabled: bool) -> tuple[int, int, RateLimitSt
         ).ask()
     )
 
-    # Build storage choices based on whether Redis is enabled
-    storage_choices = [
-        questionary.Choice("Memory (single instance)", value=RateLimitStorageType.MEMORY),
-    ]
-    if redis_enabled:
-        storage_choices.append(
-            questionary.Choice("Redis (distributed)", value=RateLimitStorageType.REDIS)
-        )
-
-    storage = cast(
-        RateLimitStorageType,
-        _check_cancelled(
-            questionary.select(
-                "Storage backend:",
-                choices=storage_choices,
-                default=storage_choices[0],
-            ).ask()
-        ),
-    )
+    # Auto-select storage: Redis when available, otherwise memory
+    storage = RateLimitStorageType.REDIS if redis_enabled else RateLimitStorageType.MEMORY
+    if storage == RateLimitStorageType.REDIS:
+        console.print("[yellow]ℹ Using Redis for rate limit storage (Redis is enabled)[/]")
 
     return int(requests_str), int(period_str), storage
 
@@ -596,24 +551,28 @@ def prompt_frontend() -> FrontendType:
     )
 
 
-def prompt_frontend_features() -> dict[str, bool]:
-    """Prompt for frontend-specific features."""
+def prompt_brand_color() -> BrandColorType:
+    """Prompt for brand color selection."""
     console.print()
-    console.print("[bold cyan]Frontend Features[/]")
+    console.print("[bold cyan]Brand Color[/]")
     console.print()
 
-    features = _check_cancelled(
-        questionary.checkbox(
-            "Select frontend features:",
-            choices=[
-                questionary.Choice("i18n (internationalization with next-intl)", value="i18n"),
-            ],
-        ).ask()
+    return cast(
+        BrandColorType,
+        _check_cancelled(
+            questionary.select(
+                "Select brand color:",
+                choices=[
+                    questionary.Choice("Blue", value=BrandColorType.BLUE),
+                    questionary.Choice("Green", value=BrandColorType.GREEN),
+                    questionary.Choice("Red", value=BrandColorType.RED),
+                    questionary.Choice("Violet", value=BrandColorType.VIOLET),
+                    questionary.Choice("Orange", value=BrandColorType.ORANGE),
+                ],
+                default=BrandColorType.BLUE,
+            ).ask()
+        ),
     )
-
-    return {
-        "enable_i18n": "i18n" in features,
-    }
 
 
 def prompt_ai_framework() -> AIFrameworkType:
@@ -656,6 +615,7 @@ def prompt_llm_provider(ai_framework: AIFrameworkType) -> LLMProviderType:
     choices = [
         questionary.Choice("OpenAI (gpt-4o-mini)", value=LLMProviderType.OPENAI),
         questionary.Choice("Anthropic (claude-sonnet-4-5)", value=LLMProviderType.ANTHROPIC),
+        questionary.Choice("Google Gemini (gemini-2.0-flash)", value=LLMProviderType.GOOGLE),
     ]
 
     # OpenRouter only available for PydanticAI (not LangChain, LangGraph, or CrewAI)
@@ -689,81 +649,122 @@ def prompt_langsmith() -> bool:
     )
 
 
-def prompt_websocket_auth(auth: AuthType) -> WebSocketAuthType:
-    """Prompt for WebSocket authentication method for AI Agent.
+def prompt_rag_config() -> RAGFeatures:
+    """Prompt for RAG configuration."""
 
-    Args:
-        auth: The main auth type. JWT WebSocket auth is only available
-            if JWT is enabled (JWT or BOTH).
-    """
     console.print()
-    console.print("[bold cyan]AI Agent WebSocket Authentication[/]")
+    console.print("[bold cyan]RAG (Retrieval Augmented Generation)[/]")
+    console.print("Configure document ingestion and retrieval logic.")
     console.print()
 
-    choices = [
-        questionary.Choice("None (public access)", value=WebSocketAuthType.NONE),
-    ]
-
-    # JWT WebSocket auth only available if main auth uses JWT
-    if auth in (AuthType.JWT, AuthType.BOTH):
-        choices.append(questionary.Choice("JWT token required", value=WebSocketAuthType.JWT))
-
-    # API Key WebSocket auth available if main auth uses API keys
-    if auth in (AuthType.API_KEY, AuthType.BOTH):
-        choices.append(
-            questionary.Choice("API Key required (query param)", value=WebSocketAuthType.API_KEY)
-        )
-
-    return cast(
-        WebSocketAuthType,
-        _check_cancelled(
-            questionary.select(
-                "Select WebSocket authentication:",
-                choices=choices,
-                default=choices[0],
-            ).ask()
-        ),
-    )
-
-
-def prompt_admin_config() -> tuple[AdminEnvironmentType, bool]:
-    """Prompt for admin panel configuration."""
-    console.print()
-    console.print("[bold cyan]Admin Panel Configuration[/]")
-    console.print()
-
-    env_choices = [
-        questionary.Choice(
-            "Development + Staging (recommended)", value=AdminEnvironmentType.DEV_STAGING
-        ),
-        questionary.Choice("Development only", value=AdminEnvironmentType.DEV_ONLY),
-        questionary.Choice("All environments", value=AdminEnvironmentType.ALL),
-        questionary.Choice("Disabled", value=AdminEnvironmentType.DISABLED),
-    ]
-
-    admin_environments = cast(
-        AdminEnvironmentType,
-        _check_cancelled(
-            questionary.select(
-                "Enable admin panel in which environments?",
-                choices=env_choices,
-                default=env_choices[0],
-            ).ask()
-        ),
-    )
-
-    # If disabled, skip auth question
-    if admin_environments == AdminEnvironmentType.DISABLED:
-        return admin_environments, False
-
-    require_auth = _check_cancelled(
+    # Prompt for RAG enable/disable
+    enable_rag = _check_cancelled(
         questionary.confirm(
-            "Require authentication for admin panel? (superuser login)",
-            default=True,
+            "Enable RAG (Retrieval Augmented Generation) applications?", default=True
         ).ask()
     )
 
-    return admin_environments, require_auth
+    enable_google_drive_ingestion = False
+    enable_s3_ingestion = False
+    enable_image_description = False
+    reranker_type = RerankerType.NONE
+    pdf_parser = PdfParserType.PYMUPDF
+    vector_store = VectorStoreType.MILVUS
+
+    # In RAG is enabled, ask for features
+    if enable_rag:
+        vector_store_choice = _check_cancelled(
+            questionary.select(
+                "Select vector store backend:",
+                choices=[
+                    questionary.Choice(
+                        "Milvus (production, Docker required)", value=VectorStoreType.MILVUS
+                    ),
+                    questionary.Choice(
+                        "Qdrant (production, Docker required)", value=VectorStoreType.QDRANT
+                    ),
+                    questionary.Choice(
+                        "ChromaDB (embedded, no Docker needed)", value=VectorStoreType.CHROMADB
+                    ),
+                    questionary.Choice(
+                        "pgvector (uses existing PostgreSQL)", value=VectorStoreType.PGVECTOR
+                    ),
+                ],
+                default=VectorStoreType.MILVUS,
+            ).ask()
+        )
+        vector_store = VectorStoreType(vector_store_choice)
+
+        enable_google_drive_ingestion = _check_cancelled(
+            questionary.confirm("Enable Google Drive document ingestion?", default=False).ask()
+        )
+
+        enable_s3_ingestion = _check_cancelled(
+            questionary.confirm("Enable S3/MinIO document ingestion?", default=False).ask()
+        )
+
+        reranker_choice = _check_cancelled(
+            questionary.select(
+                "Select reranking strategy:",
+                choices=[
+                    questionary.Choice("None (no reranking)", value=RerankerType.NONE),
+                    questionary.Choice(
+                        "Cohere Rerank (cloud API, best accuracy)", value=RerankerType.COHERE
+                    ),
+                    questionary.Choice(
+                        "Cross-Encoder (local, no API needed)", value=RerankerType.CROSS_ENCODER
+                    ),
+                ],
+                default=RerankerType.NONE,
+            ).ask()
+        )
+        reranker_type = RerankerType(reranker_choice)
+
+        # PDF Parser selection
+        pdf_parser_choice = _check_cancelled(
+            questionary.select(
+                "Select PDF parser:",
+                choices=[
+                    questionary.Choice(
+                        "All (install all parsers, select at runtime via PDF_PARSER env var)",
+                        value=PdfParserType.ALL,
+                    ),
+                    questionary.Choice(
+                        "PyMuPDF (fast, local, free) - text, tables, images, OCR fallback",
+                        value=PdfParserType.PYMUPDF,
+                    ),
+                    questionary.Choice(
+                        "LiteParse (AI-native, local) - layout-aware text, built-in OCR, requires Node.js",
+                        value=PdfParserType.LITEPARSE,
+                    ),
+                    questionary.Choice(
+                        "LlamaParse (AI-powered, cloud) - handles complex layouts & scanned docs",
+                        value=PdfParserType.LLAMAPARSE,
+                    ),
+                ],
+                default=PdfParserType.ALL,
+            ).ask()
+        )
+        pdf_parser = PdfParserType(pdf_parser_choice)
+
+        # Image description (PyMuPDF only — extracts images from PDF and describes via LLM vision)
+        if pdf_parser in (PdfParserType.PYMUPDF, PdfParserType.ALL):
+            enable_image_description = _check_cancelled(
+                questionary.confirm(
+                    "Enable image description? (PyMuPDF only — extracts images and describes via LLM vision API)",
+                    default=True,
+                ).ask()
+            )
+
+    return RAGFeatures(
+        enable_rag=enable_rag,
+        vector_store=vector_store,
+        enable_google_drive_ingestion=enable_google_drive_ingestion,
+        enable_s3_ingestion=enable_s3_ingestion,
+        enable_image_description=enable_image_description,
+        reranker_type=reranker_type,
+        pdf_parser=pdf_parser,
+    )
 
 
 def prompt_python_version() -> str:
@@ -796,12 +797,14 @@ def prompt_ports(has_frontend: bool) -> dict[str, int]:
     console.print("[bold cyan]Port Configuration[/]")
     console.print()
 
-    def validate_port(value: str) -> bool:
+    def validate_port(value: str) -> bool | str:
         try:
             port = int(value)
-            return 1024 <= port <= 65535
+            if 1024 <= port <= 65535:
+                return True
+            return "Port must be between 1024 and 65535"
         except ValueError:
-            return False
+            return "Port must be a number between 1024 and 65535"
 
     backend_port_str = _check_cancelled(
         questionary.text(
@@ -841,22 +844,16 @@ def run_interactive_prompts() -> ProjectConfig:
     if database in (DatabaseType.POSTGRESQL, DatabaseType.SQLITE):
         orm_type = prompt_orm_type()
 
-    # Auth
-    auth = prompt_auth()
+    # OAuth
+    oauth_provider = prompt_oauth()
 
-    # OAuth (only if JWT auth is enabled)
-    oauth_provider = OAuthProvider.NONE
-    enable_session_management = False
-    if auth in (AuthType.JWT, AuthType.BOTH):
-        oauth_provider = prompt_oauth()
-        # Session management (only if JWT and database enabled)
-        if database != DatabaseType.NONE:
-            enable_session_management = _check_cancelled(
-                questionary.confirm(
-                    "Enable session management? (track active sessions, logout from devices)",
-                    default=False,
-                ).ask()
-            )
+    # Session management
+    enable_session_management = _check_cancelled(
+        questionary.confirm(
+            "Enable session management? (track active sessions, logout from devices)",
+            default=True,
+        ).ask()
+    )
 
     # Background tasks (before Logfire so we can conditionally show Celery instrumentation)
     background_tasks = prompt_background_tasks()
@@ -871,7 +868,7 @@ def run_interactive_prompts() -> ProjectConfig:
     dev_tools = prompt_dev_tools()
 
     # Reverse proxy (only if Docker is enabled)
-    reverse_proxy = ReverseProxyType.TRAEFIK_INCLUDED
+    reverse_proxy = ReverseProxyType.NONE
     if dev_tools.get("enable_docker"):
         reverse_proxy = prompt_reverse_proxy()
 
@@ -892,40 +889,23 @@ def run_interactive_prompts() -> ProjectConfig:
     ):
         integrations["enable_redis"] = True
 
-    # AI framework, LLM provider, WebSocket auth and conversation persistence for AI Agent
-    ai_framework = AIFrameworkType.PYDANTIC_AI
-    llm_provider = LLMProviderType.OPENAI
-    websocket_auth = WebSocketAuthType.NONE
-    enable_conversation_persistence = False
+    # AI framework, LLM provider
     enable_langsmith = False
-    if integrations.get("enable_ai_agent"):
-        ai_framework = prompt_ai_framework()
-        llm_provider = prompt_llm_provider(ai_framework)
-        websocket_auth = prompt_websocket_auth(auth=auth)
-        # LangSmith for LangChain-ecosystem frameworks
-        if ai_framework in (
-            AIFrameworkType.LANGCHAIN,
-            AIFrameworkType.LANGGRAPH,
-            AIFrameworkType.DEEPAGENTS,
-        ):
-            enable_langsmith = prompt_langsmith()
-        # Only offer persistence if database is enabled
-        if database != DatabaseType.NONE:
-            enable_conversation_persistence = _check_cancelled(
-                questionary.confirm(
-                    "Enable conversation persistence (save chat history to database)?",
-                    default=True,
-                ).ask()
-            )
+    rag_features = RAGFeatures()
 
-    # Admin panel configuration (when enabled and SQL database - PostgreSQL or SQLite)
-    admin_environments = AdminEnvironmentType.DEV_STAGING
-    admin_require_auth = True
-    if integrations.get("enable_admin_panel") and database in (
-        DatabaseType.POSTGRESQL,
-        DatabaseType.SQLITE,
+    ai_framework = prompt_ai_framework()
+    llm_provider = prompt_llm_provider(ai_framework)
+
+    # RAG Logic
+    rag_features = prompt_rag_config()
+
+    # LangSmith for LangChain-ecosystem frameworks
+    if ai_framework in (
+        AIFrameworkType.LANGCHAIN,
+        AIFrameworkType.LANGGRAPH,
+        AIFrameworkType.DEEPAGENTS,
     ):
-        admin_environments, admin_require_auth = prompt_admin_config()
+        enable_langsmith = prompt_langsmith()
 
     # Rate limit configuration (when rate limiting is enabled)
     rate_limit_requests = 100
@@ -936,10 +916,10 @@ def run_interactive_prompts() -> ProjectConfig:
             redis_enabled=integrations.get("enable_redis", False)
         )
 
-    # Frontend features (i18n, etc.)
-    frontend_features: dict[str, bool] = {}
+    # Brand color (if frontend enabled)
+    brand_color = BrandColorType.BLUE
     if frontend != FrontendType.NONE:
-        frontend_features = prompt_frontend_features()
+        brand_color = prompt_brand_color()
 
     # Extract ci_type separately for type safety
     ci_type = cast(CIType, dev_tools.pop("ci_type"))
@@ -950,9 +930,9 @@ def run_interactive_prompts() -> ProjectConfig:
         project_description=basic_info["project_description"],
         author_name=basic_info["author_name"],
         author_email=basic_info["author_email"],
+        timezone=basic_info["timezone"],
         database=database,
         orm_type=orm_type,
-        auth=auth,
         oauth_provider=oauth_provider,
         enable_session_management=enable_session_management,
         enable_logfire=enable_logfire,
@@ -960,11 +940,8 @@ def run_interactive_prompts() -> ProjectConfig:
         background_tasks=background_tasks,
         ai_framework=ai_framework,
         llm_provider=llm_provider,
-        websocket_auth=websocket_auth,
-        enable_conversation_persistence=enable_conversation_persistence,
+        rag_features=rag_features,
         enable_langsmith=enable_langsmith,
-        admin_environments=admin_environments,
-        admin_require_auth=admin_require_auth,
         rate_limit_requests=rate_limit_requests,
         rate_limit_period=rate_limit_period,
         rate_limit_storage=rate_limit_storage,
@@ -972,11 +949,11 @@ def run_interactive_prompts() -> ProjectConfig:
         ci_type=ci_type,
         reverse_proxy=reverse_proxy,
         frontend=frontend,
+        brand_color=brand_color,
         backend_port=ports["backend_port"],
         frontend_port=ports.get("frontend_port", 3000),
         **integrations,
         **dev_tools,
-        **frontend_features,
     )
 
     return config
@@ -992,7 +969,7 @@ def show_summary(config: ProjectConfig) -> None:
     console.print(f"  [cyan]Database:[/] {config.database.value}")
     if config.database in (DatabaseType.POSTGRESQL, DatabaseType.SQLITE):
         console.print(f"  [cyan]ORM:[/] {config.orm_type.value}")
-    auth_str = config.auth.value
+    auth_str = "JWT + API Key"
     if config.oauth_provider != OAuthProvider.NONE:
         auth_str += f" + {config.oauth_provider.value} OAuth"
     console.print(f"  [cyan]Auth:[/] {auth_str}")
@@ -1011,23 +988,13 @@ def show_summary(config: ProjectConfig) -> None:
         rate_info = f"Rate Limiting ({config.rate_limit_requests}/{config.rate_limit_period}s, {config.rate_limit_storage.value})"
         enabled_features.append(rate_info)
     if config.enable_admin_panel:
-        admin_info = "Admin Panel"
-        if config.admin_environments.value != "all":
-            admin_info += f" ({config.admin_environments.value})"
-        if config.admin_require_auth:
-            admin_info += " [auth]"
-        enabled_features.append(admin_info)
-    if config.enable_websockets:
-        enabled_features.append("WebSockets")
-    if config.enable_ai_agent:
-        ai_info = f"AI Agent ({config.ai_framework.value}, {config.llm_provider.value})"
-        enabled_features.append(ai_info)
+        enabled_features.append("SQL Admin Panel")
+    ai_info = f"AI Agent ({config.ai_framework.value}, {config.llm_provider.value})"
+    if config.rag_features.enable_rag:
+        ai_info += f" + RAG ({config.rag_features.vector_store.value})"
+    enabled_features.append(ai_info)
     if config.enable_webhooks:
         enabled_features.append("Webhooks")
-    if config.enable_i18n:
-        enabled_features.append("i18n")
-    if config.include_example_crud:
-        enabled_features.append("Example CRUD")
     if config.enable_docker:
         enabled_features.append("Docker")
 

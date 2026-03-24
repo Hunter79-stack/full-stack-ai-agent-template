@@ -1,7 +1,7 @@
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_database %}
+{%- if cookiecutter.use_database %}
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { apiClient } from "@/lib/api-client";
 import { useConversationStore, useChatStore } from "@/stores";
 import type {
@@ -40,15 +40,31 @@ export function useConversations() {
     setError,
   } = useConversationStore();
   const { clearMessages } = useChatStore();
+  const hasMoreRef = useRef(true);
+  const PAGE_SIZE = 30;
 
   const fetchConversations = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const response = await apiClient.get<ConversationListResponse>(
-        "/conversations"
+        `/conversations?limit=${PAGE_SIZE}`
       );
       setConversations(response.items);
+      hasMoreRef.current = response.items.length >= PAGE_SIZE;
+      // URL ?id= param always takes priority
+      const urlId = new URLSearchParams(window.location.search).get("id");
+      if (urlId && response.items.some(c => c.id === urlId)) {
+        if (useConversationStore.getState().currentConversationId !== urlId) {
+          setCurrentConversationId(urlId);
+          clearMessages();
+          setCurrentMessages([]);
+          try {
+            const msgs = await apiClient.get<MessagesResponse>(`/conversations/${urlId}/messages`);
+            setCurrentMessages(msgs.items);
+          } catch {}
+        }
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to fetch conversations";
@@ -56,7 +72,26 @@ export function useConversations() {
     } finally {
       setLoading(false);
     }
-  }, [setConversations, setLoading, setError]);
+  }, [setConversations, setLoading, setError, setCurrentConversationId, setCurrentMessages, clearMessages]);
+
+  const loadingMoreRef = useRef(false);
+
+  const fetchMoreConversations = useCallback(async () => {
+    if (!hasMoreRef.current || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    const current = useConversationStore.getState().conversations;
+    try {
+      const response = await apiClient.get<ConversationListResponse>(
+        `/conversations?limit=${PAGE_SIZE}&skip=${current.length}`
+      );
+      if (response.items.length > 0) {
+        setConversations([...current, ...response.items]);
+      }
+      hasMoreRef.current = response.items.length >= PAGE_SIZE;
+    } catch {} finally {
+      loadingMoreRef.current = false;
+    }
+  }, [setConversations]);
 
   const createConversation = useCallback(
     async (title?: string): Promise<Conversation | null> => {
@@ -92,6 +127,9 @@ export function useConversations() {
     async (id: string) => {
       setCurrentConversationId(id);
       clearMessages();
+      const url = new URL(window.location.href);
+      url.searchParams.set("id", id);
+      window.history.replaceState({}, "", url.toString());
       setLoading(true);
       setError(null);
       try {
@@ -153,11 +191,23 @@ export function useConversations() {
   );
 
   const startNewChat = useCallback(async () => {
+    // If current conversation is empty (no messages), just reuse it
+    const currentId = useConversationStore.getState().currentConversationId;
+    if (currentId) {
+      const msgs = useConversationStore.getState().currentMessages;
+      if (msgs.length === 0) {
+        clearMessages();
+        return;
+      }
+    }
     clearMessages();
     setCurrentMessages([]);
     const newConversation = await createConversation();
     if (newConversation) {
       setCurrentConversationId(newConversation.id);
+      const url = new URL(window.location.href);
+      url.searchParams.set("id", newConversation.id);
+      window.history.replaceState({}, "", url.toString());
     }
   }, [clearMessages, setCurrentMessages, createConversation, setCurrentConversationId]);
 
@@ -168,6 +218,8 @@ export function useConversations() {
     isLoading,
     error,
     fetchConversations,
+    fetchMoreConversations,
+    hasMore: hasMoreRef.current,
     createConversation,
     selectConversation,
     archiveConversation,
@@ -176,6 +228,4 @@ export function useConversations() {
     startNewChat,
   };
 }
-{%- else %}
-// Conversations hook - not configured (enable_conversation_persistence is false)
 {%- endif %}

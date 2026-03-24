@@ -1,4 +1,4 @@
-{%- if cookiecutter.enable_conversation_persistence and cookiecutter.use_postgresql and cookiecutter.use_sqlmodel %}
+{%- if cookiecutter.use_postgresql and cookiecutter.use_sqlmodel %}
 """Conversation and message models for AI chat persistence using SQLModel."""
 
 import uuid
@@ -10,6 +10,9 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlmodel import Field, Relationship, SQLModel
 
 from app.db.base import TimestampMixin
+
+if TYPE_CHECKING:
+    from app.db.models.chat_file import ChatFile
 
 
 class Conversation(TimestampMixin, SQLModel, table=True):
@@ -91,6 +94,9 @@ class Message(TimestampMixin, SQLModel, table=True):
         back_populates="message",
         sa_relationship_kwargs={"cascade": "all, delete-orphan", "order_by": "ToolCall.started_at"},
     )
+    files: list["ChatFile"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "ChatFile.message_id", "lazy": "selectin"},
+    )
 
     def __repr__(self) -> str:
         return f"<Message(id={self.id}, role={self.role})>"
@@ -128,7 +134,7 @@ class ToolCall(SQLModel, table=True):
     )
     tool_call_id: str = Field(max_length=100)
     tool_name: str = Field(max_length=100)
-    args: dict = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False, default=dict))
+    args: dict[str, object] = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False, default=dict))
     result: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     status: str = Field(default="pending", max_length=20)  # pending, running, completed, failed
     started_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
@@ -145,18 +151,21 @@ class ToolCall(SQLModel, table=True):
         return f"<ToolCall(id={self.id}, tool_name={self.tool_name}, status={self.status})>"
 
 
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_postgresql %}
+{%- elif cookiecutter.use_postgresql %}
 """Conversation and message models for AI chat persistence."""
 
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
+
+if TYPE_CHECKING:
+    from app.db.models.chat_file import ChatFile
 
 
 class Conversation(Base, TimestampMixin):
@@ -239,6 +248,11 @@ class Message(Base, TimestampMixin):
         cascade="all, delete-orphan",
         order_by="ToolCall.started_at",
     )
+    files: Mapped[list["ChatFile"]] = relationship(
+        "ChatFile",
+        foreign_keys="ChatFile.message_id",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"<Message(id={self.id}, role={self.role})>"
@@ -273,7 +287,7 @@ class ToolCall(Base):
     )
     tool_call_id: Mapped[str] = mapped_column(String(100), nullable=False)
     tool_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    args: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    args: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending"
@@ -293,7 +307,7 @@ class ToolCall(Base):
         return f"<ToolCall(id={self.id}, tool_name={self.tool_name}, status={self.status})>"
 
 
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_sqlite and cookiecutter.use_sqlmodel %}
+{%- elif cookiecutter.use_sqlite and cookiecutter.use_sqlmodel %}
 """Conversation and message models for AI chat persistence using SQLModel."""
 
 import uuid
@@ -366,6 +380,9 @@ class Message(TimestampMixin, SQLModel, table=True):
         back_populates="message",
         sa_relationship_kwargs={"cascade": "all, delete-orphan", "order_by": "ToolCall.started_at"},
     )
+    files: list["ChatFile"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "ChatFile.message_id", "lazy": "selectin"},
+    )
 
     def __repr__(self) -> str:
         return f"<Message(id={self.id}, role={self.role})>"
@@ -407,16 +424,20 @@ class ToolCall(SQLModel, table=True):
         return f"<ToolCall(id={self.id}, tool_name={self.tool_name})>"
 
 
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_sqlite %}
+{%- elif cookiecutter.use_sqlite %}
 """Conversation and message models for AI chat persistence."""
 
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
+
+if TYPE_CHECKING:
+    from app.db.models.chat_file import ChatFile
 
 
 class Conversation(Base, TimestampMixin):
@@ -479,6 +500,11 @@ class Message(Base, TimestampMixin):
         cascade="all, delete-orphan",
         order_by="ToolCall.started_at",
     )
+    files: Mapped[list["ChatFile"]] = relationship(
+        "ChatFile",
+        foreign_keys="ChatFile.message_id",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"<Message(id={self.id}, role={self.role})>"
@@ -514,7 +540,7 @@ class ToolCall(Base):
         return f"<ToolCall(id={self.id}, tool_name={self.tool_name})>"
 
 
-{%- elif cookiecutter.enable_conversation_persistence and cookiecutter.use_mongodb %}
+{%- elif cookiecutter.use_mongodb %}
 """Conversation and message models for AI chat persistence (MongoDB)."""
 
 from datetime import UTC, datetime
@@ -530,7 +556,7 @@ class ToolCall(Document):
     message_id: str
     tool_call_id: str
     tool_name: str
-    args: dict = Field(default_factory=dict)
+    args: dict[str, object] = Field(default_factory=dict)
     result: Optional[str] = None
     status: Literal["pending", "running", "completed", "failed"] = "pending"
     started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

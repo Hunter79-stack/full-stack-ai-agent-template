@@ -1,24 +1,24 @@
-{%- if cookiecutter.enable_conversation_persistence %}
 """Conversation schemas for AI chat persistence.
 
 This module contains Pydantic schemas for Conversation, Message, and ToolCall entities.
 """
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 {%- if cookiecutter.use_postgresql %}
 from uuid import UUID
 {%- endif %}
 
 from pydantic import Field
+{%- if cookiecutter.use_sqlite %}
+from pydantic import field_validator
+{%- endif %}
 
 from app.schemas.base import BaseSchema, TimestampSchema
 
 
-# =============================================================================
 # Tool Call Schemas
-# =============================================================================
 
 
 class ToolCallBase(BaseSchema):
@@ -26,7 +26,23 @@ class ToolCallBase(BaseSchema):
 
     tool_call_id: str = Field(..., description="External tool call ID from AI framework")
     tool_name: str = Field(..., max_length=100, description="Name of the tool called")
-    args: dict = Field(default_factory=dict, description="Tool arguments")
+    args: dict[str, Any] = Field(default_factory=dict, description="Tool arguments")
+
+{%- if cookiecutter.use_sqlite %}
+
+    @field_validator("args", mode="before")
+    @classmethod
+    def deserialize_args(cls, v: object) -> dict[str, Any]:
+        """Deserialize args from JSON string (SQLite stores as TEXT)."""
+        if isinstance(v, str):
+            import json
+            try:
+                result: dict[str, Any] = json.loads(v)
+                return result
+            except (json.JSONDecodeError, TypeError):
+                return {}
+        return dict(v) if isinstance(v, dict) else {}
+{%- endif %}
 
 
 class ToolCallCreate(ToolCallBase):
@@ -60,9 +76,7 @@ class ToolCallRead(ToolCallBase):
     duration_ms: int | None = None
 
 
-# =============================================================================
 # Message Schemas
-# =============================================================================
 
 
 class MessageBase(BaseSchema):
@@ -79,6 +93,19 @@ class MessageCreate(MessageBase):
     tokens_used: int | None = Field(default=None, ge=0, description="Token count")
 
 
+class MessageFileRead(BaseSchema):
+    """Schema for file attached to a message."""
+
+{%- if cookiecutter.use_postgresql %}
+    id: UUID
+{%- else %}
+    id: str
+{%- endif %}
+    filename: str
+    mime_type: str
+    file_type: str
+
+
 class MessageRead(MessageBase, TimestampSchema):
     """Schema for reading a message (API response)."""
 
@@ -92,6 +119,7 @@ class MessageRead(MessageBase, TimestampSchema):
     model_name: str | None = None
     tokens_used: int | None = None
     tool_calls: list[ToolCallRead] = Field(default_factory=list)
+    files: list[MessageFileRead] = Field(default_factory=list)
 
 
 class MessageReadSimple(MessageBase, TimestampSchema):
@@ -108,9 +136,7 @@ class MessageReadSimple(MessageBase, TimestampSchema):
     tokens_used: int | None = None
 
 
-# =============================================================================
 # Conversation Schemas
-# =============================================================================
 
 
 class ConversationBase(BaseSchema):
@@ -169,15 +195,13 @@ class ConversationList(BaseSchema):
     total: int
 
 
-# =============================================================================
 # Aggregated Schemas for API Responses
-# =============================================================================
 
 
 class MessageList(BaseSchema):
     """Schema for listing messages."""
 
-    items: list[MessageReadSimple]
+    items: list[MessageRead]
     total: int
 
 
@@ -186,7 +210,3 @@ class ConversationWithLatestMessage(ConversationRead):
 
     latest_message: MessageReadSimple | None = None
     message_count: int = 0
-
-{%- else %}
-"""Conversation schemas - not configured."""
-{%- endif %}

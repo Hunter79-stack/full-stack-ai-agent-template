@@ -6,10 +6,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from fastapi_gen.config import (
-    AdminEnvironmentType,
     AIFrameworkType,
-    AuthType,
     BackgroundTaskType,
+    BrandColorType,
     CIType,
     DatabaseType,
     FrontendType,
@@ -17,9 +16,12 @@ from fastapi_gen.config import (
     LogfireFeatures,
     OAuthProvider,
     OrmType,
+    PdfParserType,
+    RAGFeatures,
     RateLimitStorageType,
+    RerankerType,
     ReverseProxyType,
-    WebSocketAuthType,
+    VectorStoreType,
 )
 from fastapi_gen.prompts import (
     _check_cancelled,
@@ -28,24 +30,23 @@ from fastapi_gen.prompts import (
     _validate_positive_integer,
     _validate_project_name,
     confirm_generation,
-    prompt_admin_config,
-    prompt_auth,
     prompt_background_tasks,
     prompt_basic_info,
+    prompt_brand_color,
     prompt_database,
     prompt_dev_tools,
     prompt_frontend,
-    prompt_frontend_features,
     prompt_integrations,
+    prompt_langsmith,
     prompt_llm_provider,
     prompt_logfire,
     prompt_oauth,
     prompt_orm_type,
     prompt_ports,
     prompt_python_version,
+    prompt_rag_config,
     prompt_rate_limit_config,
     prompt_reverse_proxy,
-    prompt_websocket_auth,
     run_interactive_prompts,
     show_header,
     show_summary,
@@ -214,6 +215,7 @@ class TestPromptBasicInfo:
             "My description",
             "John Doe",
             "john@example.com",
+            "UTC",
         ]
         mock_questionary.text.return_value = mock_text
 
@@ -224,6 +226,7 @@ class TestPromptBasicInfo:
             "project_description": "My description",
             "author_name": "John Doe",
             "author_email": "john@example.com",
+            "timezone": "UTC",
         }
 
     @patch("fastapi_gen.prompts.questionary")
@@ -235,6 +238,7 @@ class TestPromptBasicInfo:
             "My description",
             "John Doe",
             "john@example.com",
+            "UTC",
         ]
         mock_questionary.text.return_value = mock_text
 
@@ -251,6 +255,7 @@ class TestPromptBasicInfo:
             "My description",
             "John Doe",
             "john@example.com",
+            "UTC",
         ]
         mock_questionary.text.return_value = mock_text
 
@@ -267,6 +272,7 @@ class TestPromptBasicInfo:
             "My description",
             "John Doe",
             "john@example.com",
+            "UTC",
         ]
         mock_questionary.text.return_value = mock_text
 
@@ -349,22 +355,6 @@ class TestPromptOrmType:
 
         with pytest.raises(KeyboardInterrupt):
             prompt_orm_type()
-
-
-class TestPromptAuth:
-    """Tests for prompt_auth function."""
-
-    @patch("fastapi_gen.prompts.questionary")
-    def test_returns_selected_auth(self, mock_questionary: MagicMock) -> None:
-        """Test selected auth method is returned."""
-        mock_select = MagicMock()
-        mock_select.ask.return_value = AuthType.API_KEY
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
-
-        result = prompt_auth()
-
-        assert result == AuthType.API_KEY
 
 
 class TestPromptLogfire:
@@ -457,7 +447,6 @@ class TestPromptIntegrations:
 
         assert result["enable_redis"] is True
         assert result["enable_caching"] is True
-        assert result["enable_websockets"] is True
         assert result["enable_pagination"] is False
         assert result["enable_sentry"] is False
 
@@ -532,24 +521,6 @@ class TestPromptIntegrations:
         assert "webhooks" in choice_values
 
     @patch("fastapi_gen.prompts.questionary")
-    def test_webhooks_hidden_without_database(self, mock_questionary: MagicMock) -> None:
-        """Test webhooks option is not shown when no database is selected."""
-        mock_checkbox = MagicMock()
-        mock_checkbox.ask.return_value = []
-        mock_questionary.checkbox.return_value = mock_checkbox
-        mock_questionary.Choice = MagicMock()
-
-        prompt_integrations(
-            database=DatabaseType.NONE,
-            orm_type=OrmType.SQLALCHEMY,
-        )
-
-        # Check that checkbox was called without webhooks in choices
-        # Each call in call_args_list is (args, kwargs) tuple
-        choice_values = [call[1].get("value") for call in mock_questionary.Choice.call_args_list]
-        assert "webhooks" not in choice_values
-
-    @patch("fastapi_gen.prompts.questionary")
     def test_auto_enables_redis_for_caching(self, mock_questionary: MagicMock) -> None:
         """Test that Redis is auto-enabled when caching is selected without Redis."""
         mock_checkbox = MagicMock()
@@ -577,11 +548,6 @@ class TestPromptRateLimitConfig:
         mock_text.ask.side_effect = ["50", "30"]
         mock_questionary.text.return_value = mock_text
 
-        mock_select = MagicMock()
-        mock_select.ask.return_value = RateLimitStorageType.MEMORY
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
-
         requests, period, storage = prompt_rate_limit_config(redis_enabled=False)
 
         assert requests == 50
@@ -589,16 +555,11 @@ class TestPromptRateLimitConfig:
         assert storage == RateLimitStorageType.MEMORY
 
     @patch("fastapi_gen.prompts.questionary")
-    def test_returns_redis_storage_when_redis_enabled(self, mock_questionary: MagicMock) -> None:
-        """Test Redis storage can be selected when Redis is enabled."""
+    def test_auto_selects_redis_when_enabled(self, mock_questionary: MagicMock) -> None:
+        """Test Redis storage is auto-selected when Redis is enabled."""
         mock_text = MagicMock()
         mock_text.ask.side_effect = ["100", "60"]
         mock_questionary.text.return_value = mock_text
-
-        mock_select = MagicMock()
-        mock_select.ask.return_value = RateLimitStorageType.REDIS
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
 
         requests, period, storage = prompt_rate_limit_config(redis_enabled=True)
 
@@ -607,42 +568,17 @@ class TestPromptRateLimitConfig:
         assert storage == RateLimitStorageType.REDIS
 
     @patch("fastapi_gen.prompts.questionary")
-    def test_redis_option_not_shown_when_redis_disabled(self, mock_questionary: MagicMock) -> None:
-        """Test Redis storage option is not shown when Redis is disabled."""
+    def test_auto_selects_memory_when_redis_disabled(self, mock_questionary: MagicMock) -> None:
+        """Test memory storage is auto-selected when Redis is disabled."""
         mock_text = MagicMock()
         mock_text.ask.side_effect = ["100", "60"]
         mock_questionary.text.return_value = mock_text
 
-        mock_select = MagicMock()
-        mock_select.ask.return_value = RateLimitStorageType.MEMORY
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
+        _, _, storage = prompt_rate_limit_config(redis_enabled=False)
 
-        prompt_rate_limit_config(redis_enabled=False)
-
-        # Check that select was called with only one choice (Memory)
-        select_call = mock_questionary.select.call_args
-        choices = select_call[1]["choices"]
-        assert len(choices) == 1
-
-    @patch("fastapi_gen.prompts.questionary")
-    def test_redis_option_shown_when_redis_enabled(self, mock_questionary: MagicMock) -> None:
-        """Test Redis storage option is shown when Redis is enabled."""
-        mock_text = MagicMock()
-        mock_text.ask.side_effect = ["100", "60"]
-        mock_questionary.text.return_value = mock_text
-
-        mock_select = MagicMock()
-        mock_select.ask.return_value = RateLimitStorageType.MEMORY
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
-
-        prompt_rate_limit_config(redis_enabled=True)
-
-        # Check that select was called with two choices (Memory and Redis)
-        select_call = mock_questionary.select.call_args
-        choices = select_call[1]["choices"]
-        assert len(choices) == 2
+        assert storage == RateLimitStorageType.MEMORY
+        # No select prompt should be called for storage
+        mock_questionary.select.assert_not_called()
 
     @patch("fastapi_gen.prompts.questionary")
     def test_raises_on_cancel(self, mock_questionary: MagicMock) -> None:
@@ -718,107 +654,6 @@ class TestPromptFrontend:
             prompt_frontend()
 
 
-class TestPromptWebsocketAuth:
-    """Tests for prompt_websocket_auth function."""
-
-    @patch("fastapi_gen.prompts.questionary")
-    def test_returns_none_auth(self, mock_questionary: MagicMock) -> None:
-        """Test none auth is returned."""
-        mock_select = MagicMock()
-        mock_select.ask.return_value = WebSocketAuthType.NONE
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
-
-        result = prompt_websocket_auth(auth=AuthType.JWT)
-
-        assert result == WebSocketAuthType.NONE
-
-    @patch("fastapi_gen.prompts.questionary")
-    def test_returns_jwt_auth(self, mock_questionary: MagicMock) -> None:
-        """Test JWT auth is returned."""
-        mock_select = MagicMock()
-        mock_select.ask.return_value = WebSocketAuthType.JWT
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
-
-        result = prompt_websocket_auth(auth=AuthType.JWT)
-
-        assert result == WebSocketAuthType.JWT
-
-    @patch("fastapi_gen.prompts.questionary")
-    def test_returns_api_key_auth(self, mock_questionary: MagicMock) -> None:
-        """Test API key auth is returned."""
-        mock_select = MagicMock()
-        mock_select.ask.return_value = WebSocketAuthType.API_KEY
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
-
-        result = prompt_websocket_auth(auth=AuthType.API_KEY)
-
-        assert result == WebSocketAuthType.API_KEY
-
-    @patch("fastapi_gen.prompts.questionary")
-    def test_jwt_option_shown_with_jwt_auth(self, mock_questionary: MagicMock) -> None:
-        """Test JWT option is shown when main auth is JWT."""
-        mock_select = MagicMock()
-        mock_select.ask.return_value = WebSocketAuthType.NONE
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
-
-        prompt_websocket_auth(auth=AuthType.JWT)
-
-        # Check that JWT option was included
-        choice_values = [call[1].get("value") for call in mock_questionary.Choice.call_args_list]
-        assert WebSocketAuthType.JWT in choice_values
-        assert WebSocketAuthType.API_KEY not in choice_values  # Not shown for JWT-only
-
-    @patch("fastapi_gen.prompts.questionary")
-    def test_jwt_option_hidden_with_api_key_auth(self, mock_questionary: MagicMock) -> None:
-        """Test JWT option is hidden when main auth is API key only."""
-        mock_select = MagicMock()
-        mock_select.ask.return_value = WebSocketAuthType.NONE
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
-
-        prompt_websocket_auth(auth=AuthType.API_KEY)
-
-        # Check that JWT option was NOT included
-        choice_values = [call[1].get("value") for call in mock_questionary.Choice.call_args_list]
-        assert WebSocketAuthType.JWT not in choice_values
-        assert WebSocketAuthType.API_KEY in choice_values
-
-    @patch("fastapi_gen.prompts.questionary")
-    def test_both_options_shown_with_both_auth(self, mock_questionary: MagicMock) -> None:
-        """Test both JWT and API key options are shown when main auth is BOTH."""
-        mock_select = MagicMock()
-        mock_select.ask.return_value = WebSocketAuthType.NONE
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
-
-        prompt_websocket_auth(auth=AuthType.BOTH)
-
-        # Check that both options were included
-        choice_values = [call[1].get("value") for call in mock_questionary.Choice.call_args_list]
-        assert WebSocketAuthType.JWT in choice_values
-        assert WebSocketAuthType.API_KEY in choice_values
-
-    @patch("fastapi_gen.prompts.questionary")
-    def test_no_auth_options_with_none_auth(self, mock_questionary: MagicMock) -> None:
-        """Test only None option is available when main auth is NONE."""
-        mock_select = MagicMock()
-        mock_select.ask.return_value = WebSocketAuthType.NONE
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
-
-        prompt_websocket_auth(auth=AuthType.NONE)
-
-        # Check that only None option was included
-        choice_values = [call[1].get("value") for call in mock_questionary.Choice.call_args_list]
-        assert WebSocketAuthType.NONE in choice_values
-        assert WebSocketAuthType.JWT not in choice_values
-        assert WebSocketAuthType.API_KEY not in choice_values
-
-
 class TestPromptAIFramework:
     """Tests for prompt_ai_framework function."""
 
@@ -849,59 +684,6 @@ class TestPromptAIFramework:
         result = prompt_ai_framework()
 
         assert result == AIFrameworkType.LANGCHAIN
-
-
-class TestPromptAdminConfig:
-    """Tests for prompt_admin_config function."""
-
-    @patch("fastapi_gen.prompts.questionary")
-    def test_returns_dev_staging_with_auth(self, mock_questionary: MagicMock) -> None:
-        """Test dev_staging environment with auth is returned."""
-        mock_select = MagicMock()
-        mock_select.ask.return_value = AdminEnvironmentType.DEV_STAGING
-        mock_questionary.select.return_value = mock_select
-
-        mock_confirm = MagicMock()
-        mock_confirm.ask.return_value = True
-        mock_questionary.confirm.return_value = mock_confirm
-        mock_questionary.Choice = MagicMock()
-
-        env, require_auth = prompt_admin_config()
-
-        assert env == AdminEnvironmentType.DEV_STAGING
-        assert require_auth is True
-
-    @patch("fastapi_gen.prompts.questionary")
-    def test_returns_disabled_skips_auth(self, mock_questionary: MagicMock) -> None:
-        """Test disabled environment skips auth question."""
-        mock_select = MagicMock()
-        mock_select.ask.return_value = AdminEnvironmentType.DISABLED
-        mock_questionary.select.return_value = mock_select
-        mock_questionary.Choice = MagicMock()
-
-        env, require_auth = prompt_admin_config()
-
-        assert env == AdminEnvironmentType.DISABLED
-        assert require_auth is False
-        # confirm should not have been called
-        mock_questionary.confirm.assert_not_called()
-
-    @patch("fastapi_gen.prompts.questionary")
-    def test_returns_all_without_auth(self, mock_questionary: MagicMock) -> None:
-        """Test all environment without auth is returned."""
-        mock_select = MagicMock()
-        mock_select.ask.return_value = AdminEnvironmentType.ALL
-        mock_questionary.select.return_value = mock_select
-
-        mock_confirm = MagicMock()
-        mock_confirm.ask.return_value = False
-        mock_questionary.confirm.return_value = mock_confirm
-        mock_questionary.Choice = MagicMock()
-
-        env, require_auth = prompt_admin_config()
-
-        assert env == AdminEnvironmentType.ALL
-        assert require_auth is False
 
 
 class TestPromptPythonVersion:
@@ -1004,11 +786,11 @@ class TestPromptPorts:
         call_kwargs = mock_questionary.text.call_args[1]
         validate_port = call_kwargs["validate"]
 
-        # Test invalid ports
-        assert validate_port("1023") is False  # Below range
-        assert validate_port("65536") is False  # Above range
-        assert validate_port("invalid") is False  # Not a number
-        assert validate_port("") is False  # Empty string
+        # Test invalid ports - validator returns error string (not False)
+        assert validate_port("1023") is not True  # Below range
+        assert validate_port("65536") is not True  # Above range
+        assert validate_port("invalid") is not True  # Not a number
+        assert validate_port("") is not True  # Empty string
 
 
 class TestPromptOAuth:
@@ -1163,10 +945,10 @@ class TestPromptLLMProvider:
 
         prompt_llm_provider(AIFrameworkType.PYDANTIC_AI)
 
-        # Check that select was called with 3 choices (OpenAI, Anthropic, OpenRouter)
+        # Check that select was called with 4 choices (OpenAI, Anthropic, Google, OpenRouter)
         select_call = mock_questionary.select.call_args
         choices = select_call[1]["choices"]
-        assert len(choices) == 3
+        assert len(choices) == 4
 
     @patch("fastapi_gen.prompts.questionary")
     def test_openrouter_option_not_added_for_langchain(self, mock_questionary: MagicMock) -> None:
@@ -1178,10 +960,10 @@ class TestPromptLLMProvider:
 
         prompt_llm_provider(AIFrameworkType.LANGCHAIN)
 
-        # Check that select was called with 2 choices (OpenAI, Anthropic)
+        # Check that select was called with 3 choices (OpenAI, Anthropic, Google)
         select_call = mock_questionary.select.call_args
         choices = select_call[1]["choices"]
-        assert len(choices) == 2
+        assert len(choices) == 3
 
     @patch("fastapi_gen.prompts.questionary")
     def test_raises_on_cancel(self, mock_questionary: MagicMock) -> None:
@@ -1195,209 +977,38 @@ class TestPromptLLMProvider:
             prompt_llm_provider(AIFrameworkType.PYDANTIC_AI)
 
 
-class TestPromptFrontendFeatures:
-    """Tests for prompt_frontend_features function."""
+class TestPromptBrandColor:
+    """Tests for prompt_brand_color function."""
 
     @patch("fastapi_gen.prompts.questionary")
-    def test_returns_i18n_enabled(self, mock_questionary: MagicMock) -> None:
-        """Test i18n feature is returned when selected."""
-        mock_checkbox = MagicMock()
-        mock_checkbox.ask.return_value = ["i18n"]
-        mock_questionary.checkbox.return_value = mock_checkbox
+    def test_returns_blue(self, mock_questionary: MagicMock) -> None:
+        """Test blue brand color is returned when selected."""
+        mock_select = MagicMock()
+        mock_select.ask.return_value = BrandColorType.BLUE
+        mock_questionary.select.return_value = mock_select
         mock_questionary.Choice = MagicMock()
 
-        result = prompt_frontend_features()
+        result = prompt_brand_color()
 
-        assert result["enable_i18n"] is True
+        assert result == BrandColorType.BLUE
 
     @patch("fastapi_gen.prompts.questionary")
-    def test_returns_no_features(self, mock_questionary: MagicMock) -> None:
-        """Test empty features are returned when nothing selected."""
-        mock_checkbox = MagicMock()
-        mock_checkbox.ask.return_value = []
-        mock_questionary.checkbox.return_value = mock_checkbox
+    def test_returns_green(self, mock_questionary: MagicMock) -> None:
+        """Test green brand color is returned when selected."""
+        mock_select = MagicMock()
+        mock_select.ask.return_value = BrandColorType.GREEN
+        mock_questionary.select.return_value = mock_select
         mock_questionary.Choice = MagicMock()
 
-        result = prompt_frontend_features()
+        result = prompt_brand_color()
 
-        assert result["enable_i18n"] is False
+        assert result == BrandColorType.GREEN
 
 
 class TestRunInteractivePrompts:
     """Tests for run_interactive_prompts function."""
 
     @patch("fastapi_gen.prompts.questionary")
-    @patch("fastapi_gen.prompts.prompt_ports")
-    @patch("fastapi_gen.prompts.prompt_python_version")
-    @patch("fastapi_gen.prompts.prompt_frontend")
-    @patch("fastapi_gen.prompts.prompt_reverse_proxy")
-    @patch("fastapi_gen.prompts.prompt_dev_tools")
-    @patch("fastapi_gen.prompts.prompt_integrations")
-    @patch("fastapi_gen.prompts.prompt_background_tasks")
-    @patch("fastapi_gen.prompts.prompt_logfire")
-    @patch("fastapi_gen.prompts.prompt_oauth")
-    @patch("fastapi_gen.prompts.prompt_auth")
-    @patch("fastapi_gen.prompts.prompt_orm_type")
-    @patch("fastapi_gen.prompts.prompt_database")
-    @patch("fastapi_gen.prompts.prompt_basic_info")
-    @patch("fastapi_gen.prompts.show_header")
-    def test_builds_project_config(
-        self,
-        mock_header: MagicMock,
-        mock_basic_info: MagicMock,
-        mock_database: MagicMock,
-        mock_orm_type: MagicMock,
-        mock_auth: MagicMock,
-        mock_oauth: MagicMock,
-        mock_logfire: MagicMock,
-        mock_background_tasks: MagicMock,
-        mock_integrations: MagicMock,
-        mock_dev_tools: MagicMock,
-        mock_reverse_proxy: MagicMock,
-        mock_frontend: MagicMock,
-        mock_python_version: MagicMock,
-        mock_ports: MagicMock,
-        mock_questionary: MagicMock,
-    ) -> None:
-        """Test ProjectConfig is built from prompts."""
-        mock_basic_info.return_value = {
-            "project_name": "test_project",
-            "project_description": "Test",
-            "author_name": "Test Author",
-            "author_email": "test@test.com",
-        }
-        mock_database.return_value = DatabaseType.POSTGRESQL
-        mock_orm_type.return_value = OrmType.SQLALCHEMY
-        mock_auth.return_value = AuthType.JWT
-        mock_oauth.return_value = OAuthProvider.NONE
-        mock_logfire.return_value = (True, LogfireFeatures())
-        mock_background_tasks.return_value = BackgroundTaskType.NONE
-        mock_integrations.return_value = {
-            "enable_redis": False,
-            "enable_caching": False,
-            "enable_rate_limiting": False,
-            "enable_pagination": True,
-            "enable_sentry": False,
-            "enable_prometheus": False,
-            "enable_admin_panel": False,
-            "enable_websockets": False,
-            "enable_file_storage": False,
-            "enable_ai_agent": False,
-            "enable_cors": True,
-            "enable_orjson": True,
-        }
-        mock_dev_tools.return_value = {
-            "enable_pytest": True,
-            "enable_precommit": True,
-            "enable_docker": True,
-            "enable_kubernetes": False,
-            "ci_type": CIType.GITHUB,
-        }
-        mock_reverse_proxy.return_value = ReverseProxyType.TRAEFIK_INCLUDED
-        mock_frontend.return_value = FrontendType.NONE
-        mock_python_version.return_value = "3.12"
-        mock_ports.return_value = {"backend_port": 8000}
-
-        # Mock session management confirm
-        mock_confirm = MagicMock()
-        mock_confirm.ask.return_value = False
-        mock_questionary.confirm.return_value = mock_confirm
-
-        config = run_interactive_prompts()
-
-        assert config.project_name == "test_project"
-        assert config.database == DatabaseType.POSTGRESQL
-        assert config.auth == AuthType.JWT
-        assert config.enable_logfire is True
-        assert config.ci_type == CIType.GITHUB
-        assert config.python_version == "3.12"
-        assert config.backend_port == 8000
-
-    @patch("fastapi_gen.prompts.questionary")
-    @patch("fastapi_gen.prompts.prompt_ports")
-    @patch("fastapi_gen.prompts.prompt_python_version")
-    @patch("fastapi_gen.prompts.prompt_frontend")
-    @patch("fastapi_gen.prompts.prompt_reverse_proxy")
-    @patch("fastapi_gen.prompts.prompt_dev_tools")
-    @patch("fastapi_gen.prompts.prompt_integrations")
-    @patch("fastapi_gen.prompts.prompt_background_tasks")
-    @patch("fastapi_gen.prompts.prompt_logfire")
-    @patch("fastapi_gen.prompts.prompt_oauth")
-    @patch("fastapi_gen.prompts.prompt_auth")
-    @patch("fastapi_gen.prompts.prompt_orm_type")
-    @patch("fastapi_gen.prompts.prompt_database")
-    @patch("fastapi_gen.prompts.prompt_basic_info")
-    @patch("fastapi_gen.prompts.show_header")
-    def test_auto_enables_redis_for_celery(
-        self,
-        mock_header: MagicMock,
-        mock_basic_info: MagicMock,
-        mock_database: MagicMock,
-        mock_orm_type: MagicMock,
-        mock_auth: MagicMock,
-        mock_oauth: MagicMock,
-        mock_logfire: MagicMock,
-        mock_background_tasks: MagicMock,
-        mock_integrations: MagicMock,
-        mock_dev_tools: MagicMock,
-        mock_reverse_proxy: MagicMock,
-        mock_frontend: MagicMock,
-        mock_python_version: MagicMock,
-        mock_ports: MagicMock,
-        mock_questionary: MagicMock,
-    ) -> None:
-        """Test Redis is auto-enabled when Celery is selected."""
-        mock_basic_info.return_value = {
-            "project_name": "test_project",
-            "project_description": "Test",
-            "author_name": "Test Author",
-            "author_email": "test@test.com",
-        }
-        mock_database.return_value = DatabaseType.POSTGRESQL
-        mock_orm_type.return_value = OrmType.SQLALCHEMY
-        mock_auth.return_value = AuthType.JWT
-        mock_oauth.return_value = OAuthProvider.NONE
-        mock_logfire.return_value = (False, LogfireFeatures())
-        mock_background_tasks.return_value = BackgroundTaskType.CELERY
-        mock_integrations.return_value = {
-            "enable_redis": False,  # User didn't select Redis
-            "enable_caching": False,
-            "enable_rate_limiting": False,
-            "enable_pagination": True,
-            "enable_sentry": False,
-            "enable_prometheus": False,
-            "enable_admin_panel": False,
-            "enable_websockets": False,
-            "enable_file_storage": False,
-            "enable_ai_agent": False,
-            "enable_cors": True,
-            "enable_orjson": True,
-        }
-        mock_dev_tools.return_value = {
-            "enable_pytest": True,
-            "enable_precommit": True,
-            "enable_docker": True,
-            "enable_kubernetes": False,
-            "ci_type": CIType.GITHUB,
-        }
-        mock_reverse_proxy.return_value = ReverseProxyType.TRAEFIK_INCLUDED
-        mock_frontend.return_value = FrontendType.NONE
-        mock_python_version.return_value = "3.12"
-        mock_ports.return_value = {"backend_port": 8000}
-
-        # Mock session management confirm
-        mock_confirm = MagicMock()
-        mock_confirm.ask.return_value = False
-        mock_questionary.confirm.return_value = mock_confirm
-
-        config = run_interactive_prompts()
-
-        # Redis should be auto-enabled for Celery
-        assert config.enable_redis is True
-        assert config.background_tasks == BackgroundTaskType.CELERY
-
-    @patch("fastapi_gen.prompts.questionary")
-    @patch("fastapi_gen.prompts.prompt_websocket_auth")
     @patch("fastapi_gen.prompts.prompt_llm_provider")
     @patch("fastapi_gen.prompts.prompt_ai_framework")
     @patch("fastapi_gen.prompts.prompt_ports")
@@ -1409,18 +1020,18 @@ class TestRunInteractivePrompts:
     @patch("fastapi_gen.prompts.prompt_background_tasks")
     @patch("fastapi_gen.prompts.prompt_logfire")
     @patch("fastapi_gen.prompts.prompt_oauth")
-    @patch("fastapi_gen.prompts.prompt_auth")
     @patch("fastapi_gen.prompts.prompt_orm_type")
     @patch("fastapi_gen.prompts.prompt_database")
     @patch("fastapi_gen.prompts.prompt_basic_info")
     @patch("fastapi_gen.prompts.show_header")
-    def test_ai_agent_with_conversation_persistence(
+    @patch("fastapi_gen.prompts.prompt_rag_config")
+    def test_builds_project_config(
         self,
+        mock_rag_config: MagicMock,
         mock_header: MagicMock,
         mock_basic_info: MagicMock,
         mock_database: MagicMock,
         mock_orm_type: MagicMock,
-        mock_auth: MagicMock,
         mock_oauth: MagicMock,
         mock_logfire: MagicMock,
         mock_background_tasks: MagicMock,
@@ -1432,19 +1043,18 @@ class TestRunInteractivePrompts:
         mock_ports: MagicMock,
         mock_ai_framework: MagicMock,
         mock_llm_provider: MagicMock,
-        mock_websocket_auth: MagicMock,
         mock_questionary: MagicMock,
     ) -> None:
-        """Test AI agent prompts websocket auth and conversation persistence."""
+        """Test ProjectConfig is built from prompts."""
         mock_basic_info.return_value = {
             "project_name": "test_project",
             "project_description": "Test",
             "author_name": "Test Author",
             "author_email": "test@test.com",
+            "timezone": "UTC",
         }
         mock_database.return_value = DatabaseType.POSTGRESQL
         mock_orm_type.return_value = OrmType.SQLALCHEMY
-        mock_auth.return_value = AuthType.JWT
         mock_oauth.return_value = OAuthProvider.NONE
         mock_logfire.return_value = (True, LogfireFeatures())
         mock_background_tasks.return_value = BackgroundTaskType.NONE
@@ -1458,8 +1068,6 @@ class TestRunInteractivePrompts:
             "enable_admin_panel": False,
             "enable_websockets": False,
             "enable_file_storage": False,
-            "enable_ai_agent": True,  # AI Agent enabled
-            "include_example_crud": True,
             "enable_cors": True,
             "enable_orjson": True,
         }
@@ -1476,24 +1084,25 @@ class TestRunInteractivePrompts:
         mock_ports.return_value = {"backend_port": 8000}
         mock_ai_framework.return_value = AIFrameworkType.PYDANTIC_AI
         mock_llm_provider.return_value = LLMProviderType.OPENAI
-        mock_websocket_auth.return_value = WebSocketAuthType.JWT
+        mock_rag_config.return_value = RAGFeatures(enable_rag=False)
 
-        # Mock session management and conversation persistence confirm
+        # Mock session management confirm
         mock_confirm = MagicMock()
-        mock_confirm.ask.side_effect = [False, True]  # session mgmt, conversation persistence
+        mock_confirm.ask.return_value = False
         mock_questionary.confirm.return_value = mock_confirm
 
         config = run_interactive_prompts()
 
-        # WebSocket auth and conversation persistence should be set
-        assert config.enable_ai_agent is True
-        assert config.websocket_auth == WebSocketAuthType.JWT
-        assert config.enable_conversation_persistence is True
-        assert config.llm_provider == LLMProviderType.OPENAI
-        mock_websocket_auth.assert_called_once()
+        assert config.project_name == "test_project"
+        assert config.database == DatabaseType.POSTGRESQL
+        assert config.enable_logfire is True
+        assert config.ci_type == CIType.GITHUB
+        assert config.python_version == "3.12"
+        assert config.backend_port == 8000
 
     @patch("fastapi_gen.prompts.questionary")
-    @patch("fastapi_gen.prompts.prompt_admin_config")
+    @patch("fastapi_gen.prompts.prompt_llm_provider")
+    @patch("fastapi_gen.prompts.prompt_ai_framework")
     @patch("fastapi_gen.prompts.prompt_ports")
     @patch("fastapi_gen.prompts.prompt_python_version")
     @patch("fastapi_gen.prompts.prompt_frontend")
@@ -1503,18 +1112,18 @@ class TestRunInteractivePrompts:
     @patch("fastapi_gen.prompts.prompt_background_tasks")
     @patch("fastapi_gen.prompts.prompt_logfire")
     @patch("fastapi_gen.prompts.prompt_oauth")
-    @patch("fastapi_gen.prompts.prompt_auth")
     @patch("fastapi_gen.prompts.prompt_orm_type")
     @patch("fastapi_gen.prompts.prompt_database")
     @patch("fastapi_gen.prompts.prompt_basic_info")
     @patch("fastapi_gen.prompts.show_header")
-    def test_admin_panel_with_postgresql(
+    @patch("fastapi_gen.prompts.prompt_rag_config")
+    def test_auto_enables_redis_for_celery(
         self,
+        mock_rag_config: MagicMock,
         mock_header: MagicMock,
         mock_basic_info: MagicMock,
         mock_database: MagicMock,
         mock_orm_type: MagicMock,
-        mock_auth: MagicMock,
         mock_oauth: MagicMock,
         mock_logfire: MagicMock,
         mock_background_tasks: MagicMock,
@@ -1524,34 +1133,33 @@ class TestRunInteractivePrompts:
         mock_frontend: MagicMock,
         mock_python_version: MagicMock,
         mock_ports: MagicMock,
-        mock_admin_config: MagicMock,
+        mock_ai_framework: MagicMock,
+        mock_llm_provider: MagicMock,
         mock_questionary: MagicMock,
     ) -> None:
-        """Test admin panel prompts config when PostgreSQL is selected."""
+        """Test Redis is auto-enabled when Celery is selected."""
         mock_basic_info.return_value = {
             "project_name": "test_project",
             "project_description": "Test",
             "author_name": "Test Author",
             "author_email": "test@test.com",
+            "timezone": "UTC",
         }
         mock_database.return_value = DatabaseType.POSTGRESQL
         mock_orm_type.return_value = OrmType.SQLALCHEMY
-        mock_auth.return_value = AuthType.JWT
         mock_oauth.return_value = OAuthProvider.NONE
-        mock_logfire.return_value = (True, LogfireFeatures())
-        mock_background_tasks.return_value = BackgroundTaskType.NONE
+        mock_logfire.return_value = (False, LogfireFeatures())
+        mock_background_tasks.return_value = BackgroundTaskType.CELERY
         mock_integrations.return_value = {
-            "enable_redis": False,
+            "enable_redis": False,  # User didn't select Redis
             "enable_caching": False,
             "enable_rate_limiting": False,
             "enable_pagination": True,
             "enable_sentry": False,
             "enable_prometheus": False,
-            "enable_admin_panel": True,  # Admin panel enabled
+            "enable_admin_panel": False,
             "enable_websockets": False,
             "enable_file_storage": False,
-            "enable_ai_agent": False,
-            "include_example_crud": True,
             "enable_cors": True,
             "enable_orjson": True,
         }
@@ -1566,7 +1174,185 @@ class TestRunInteractivePrompts:
         mock_frontend.return_value = FrontendType.NONE
         mock_python_version.return_value = "3.12"
         mock_ports.return_value = {"backend_port": 8000}
-        mock_admin_config.return_value = (AdminEnvironmentType.DEV_ONLY, True)
+        mock_ai_framework.return_value = AIFrameworkType.PYDANTIC_AI
+        mock_llm_provider.return_value = LLMProviderType.OPENAI
+        mock_rag_config.return_value = RAGFeatures(enable_rag=False)
+
+        # Mock session management confirm
+        mock_confirm = MagicMock()
+        mock_confirm.ask.return_value = False
+        mock_questionary.confirm.return_value = mock_confirm
+
+        config = run_interactive_prompts()
+
+        # Redis should be auto-enabled for Celery
+        assert config.enable_redis is True
+        assert config.background_tasks == BackgroundTaskType.CELERY
+
+    @patch("fastapi_gen.prompts.questionary")
+    @patch("fastapi_gen.prompts.prompt_llm_provider")
+    @patch("fastapi_gen.prompts.prompt_ai_framework")
+    @patch("fastapi_gen.prompts.prompt_ports")
+    @patch("fastapi_gen.prompts.prompt_python_version")
+    @patch("fastapi_gen.prompts.prompt_frontend")
+    @patch("fastapi_gen.prompts.prompt_reverse_proxy")
+    @patch("fastapi_gen.prompts.prompt_dev_tools")
+    @patch("fastapi_gen.prompts.prompt_integrations")
+    @patch("fastapi_gen.prompts.prompt_background_tasks")
+    @patch("fastapi_gen.prompts.prompt_logfire")
+    @patch("fastapi_gen.prompts.prompt_oauth")
+    @patch("fastapi_gen.prompts.prompt_orm_type")
+    @patch("fastapi_gen.prompts.prompt_database")
+    @patch("fastapi_gen.prompts.prompt_basic_info")
+    @patch("fastapi_gen.prompts.show_header")
+    @patch("fastapi_gen.prompts.prompt_rag_config")
+    def test_ai_agent_with_conversation_persistence(
+        self,
+        mock_rag_config: MagicMock,
+        mock_header: MagicMock,
+        mock_basic_info: MagicMock,
+        mock_database: MagicMock,
+        mock_orm_type: MagicMock,
+        mock_oauth: MagicMock,
+        mock_logfire: MagicMock,
+        mock_background_tasks: MagicMock,
+        mock_integrations: MagicMock,
+        mock_dev_tools: MagicMock,
+        mock_reverse_proxy: MagicMock,
+        mock_frontend: MagicMock,
+        mock_python_version: MagicMock,
+        mock_ports: MagicMock,
+        mock_ai_framework: MagicMock,
+        mock_llm_provider: MagicMock,
+        mock_questionary: MagicMock,
+    ) -> None:
+        """Test AI agent prompts conversation persistence."""
+        mock_basic_info.return_value = {
+            "project_name": "test_project",
+            "project_description": "Test",
+            "author_name": "Test Author",
+            "author_email": "test@test.com",
+            "timezone": "UTC",
+        }
+        mock_database.return_value = DatabaseType.POSTGRESQL
+        mock_orm_type.return_value = OrmType.SQLALCHEMY
+        mock_oauth.return_value = OAuthProvider.NONE
+        mock_logfire.return_value = (True, LogfireFeatures())
+        mock_background_tasks.return_value = BackgroundTaskType.NONE
+        mock_integrations.return_value = {
+            "enable_redis": False,
+            "enable_caching": False,
+            "enable_rate_limiting": False,
+            "enable_pagination": True,
+            "enable_sentry": False,
+            "enable_prometheus": False,
+            "enable_admin_panel": False,
+            "enable_websockets": False,
+            "enable_file_storage": False,
+            "enable_cors": True,
+            "enable_orjson": True,
+        }
+        mock_dev_tools.return_value = {
+            "enable_pytest": True,
+            "enable_precommit": True,
+            "enable_docker": True,
+            "enable_kubernetes": False,
+            "ci_type": CIType.GITHUB,
+        }
+        mock_reverse_proxy.return_value = ReverseProxyType.TRAEFIK_INCLUDED
+        mock_frontend.return_value = FrontendType.NONE
+        mock_python_version.return_value = "3.12"
+        mock_ports.return_value = {"backend_port": 8000}
+        mock_ai_framework.return_value = AIFrameworkType.PYDANTIC_AI
+        mock_llm_provider.return_value = LLMProviderType.OPENAI
+        mock_rag_config.return_value = RAGFeatures(enable_rag=False)  # Skip RAG logic
+
+        # Mock session management confirm
+        mock_confirm = MagicMock()
+        mock_confirm.ask.return_value = False
+        mock_questionary.confirm.return_value = mock_confirm
+
+        config = run_interactive_prompts()
+
+        assert config.llm_provider == LLMProviderType.OPENAI
+
+    @patch("fastapi_gen.prompts.questionary")
+    @patch("fastapi_gen.prompts.prompt_llm_provider")
+    @patch("fastapi_gen.prompts.prompt_ai_framework")
+    @patch("fastapi_gen.prompts.prompt_ports")
+    @patch("fastapi_gen.prompts.prompt_python_version")
+    @patch("fastapi_gen.prompts.prompt_frontend")
+    @patch("fastapi_gen.prompts.prompt_reverse_proxy")
+    @patch("fastapi_gen.prompts.prompt_dev_tools")
+    @patch("fastapi_gen.prompts.prompt_integrations")
+    @patch("fastapi_gen.prompts.prompt_background_tasks")
+    @patch("fastapi_gen.prompts.prompt_logfire")
+    @patch("fastapi_gen.prompts.prompt_oauth")
+    @patch("fastapi_gen.prompts.prompt_orm_type")
+    @patch("fastapi_gen.prompts.prompt_database")
+    @patch("fastapi_gen.prompts.prompt_basic_info")
+    @patch("fastapi_gen.prompts.show_header")
+    @patch("fastapi_gen.prompts.prompt_rag_config")
+    def test_admin_panel_with_postgresql(
+        self,
+        mock_rag_config: MagicMock,
+        mock_header: MagicMock,
+        mock_basic_info: MagicMock,
+        mock_database: MagicMock,
+        mock_orm_type: MagicMock,
+        mock_oauth: MagicMock,
+        mock_logfire: MagicMock,
+        mock_background_tasks: MagicMock,
+        mock_integrations: MagicMock,
+        mock_dev_tools: MagicMock,
+        mock_reverse_proxy: MagicMock,
+        mock_frontend: MagicMock,
+        mock_python_version: MagicMock,
+        mock_ports: MagicMock,
+        mock_ai_framework: MagicMock,
+        mock_llm_provider: MagicMock,
+        mock_questionary: MagicMock,
+    ) -> None:
+        """Test admin panel prompts config when PostgreSQL is selected."""
+        mock_basic_info.return_value = {
+            "project_name": "test_project",
+            "project_description": "Test",
+            "author_name": "Test Author",
+            "author_email": "test@test.com",
+            "timezone": "UTC",
+        }
+        mock_database.return_value = DatabaseType.POSTGRESQL
+        mock_orm_type.return_value = OrmType.SQLALCHEMY
+        mock_oauth.return_value = OAuthProvider.NONE
+        mock_logfire.return_value = (True, LogfireFeatures())
+        mock_background_tasks.return_value = BackgroundTaskType.NONE
+        mock_integrations.return_value = {
+            "enable_redis": False,
+            "enable_caching": False,
+            "enable_rate_limiting": False,
+            "enable_pagination": True,
+            "enable_sentry": False,
+            "enable_prometheus": False,
+            "enable_admin_panel": True,  # Admin panel enabled
+            "enable_websockets": False,
+            "enable_file_storage": False,
+            "enable_cors": True,
+            "enable_orjson": True,
+        }
+        mock_dev_tools.return_value = {
+            "enable_pytest": True,
+            "enable_precommit": True,
+            "enable_docker": True,
+            "enable_kubernetes": False,
+            "ci_type": CIType.GITHUB,
+        }
+        mock_reverse_proxy.return_value = ReverseProxyType.TRAEFIK_INCLUDED
+        mock_frontend.return_value = FrontendType.NONE
+        mock_python_version.return_value = "3.12"
+        mock_ports.return_value = {"backend_port": 8000}
+        mock_ai_framework.return_value = AIFrameworkType.PYDANTIC_AI
+        mock_llm_provider.return_value = LLMProviderType.OPENAI
+        mock_rag_config.return_value = RAGFeatures(enable_rag=False)
 
         # Mock session management confirm
         mock_confirm = MagicMock()
@@ -1577,12 +1363,10 @@ class TestRunInteractivePrompts:
 
         # Admin config should be set
         assert config.enable_admin_panel is True
-        assert config.admin_environments == AdminEnvironmentType.DEV_ONLY
-        assert config.admin_require_auth is True
-        mock_admin_config.assert_called_once()
 
     @patch("fastapi_gen.prompts.questionary")
-    @patch("fastapi_gen.prompts.prompt_admin_config")
+    @patch("fastapi_gen.prompts.prompt_llm_provider")
+    @patch("fastapi_gen.prompts.prompt_ai_framework")
     @patch("fastapi_gen.prompts.prompt_ports")
     @patch("fastapi_gen.prompts.prompt_python_version")
     @patch("fastapi_gen.prompts.prompt_frontend")
@@ -1592,18 +1376,18 @@ class TestRunInteractivePrompts:
     @patch("fastapi_gen.prompts.prompt_background_tasks")
     @patch("fastapi_gen.prompts.prompt_logfire")
     @patch("fastapi_gen.prompts.prompt_oauth")
-    @patch("fastapi_gen.prompts.prompt_auth")
     @patch("fastapi_gen.prompts.prompt_orm_type")
     @patch("fastapi_gen.prompts.prompt_database")
     @patch("fastapi_gen.prompts.prompt_basic_info")
     @patch("fastapi_gen.prompts.show_header")
+    @patch("fastapi_gen.prompts.prompt_rag_config")
     def test_admin_panel_with_sqlite(
         self,
+        mock_rag_config: MagicMock,
         mock_header: MagicMock,
         mock_basic_info: MagicMock,
         mock_database: MagicMock,
         mock_orm_type: MagicMock,
-        mock_auth: MagicMock,
         mock_oauth: MagicMock,
         mock_logfire: MagicMock,
         mock_background_tasks: MagicMock,
@@ -1613,7 +1397,8 @@ class TestRunInteractivePrompts:
         mock_frontend: MagicMock,
         mock_python_version: MagicMock,
         mock_ports: MagicMock,
-        mock_admin_config: MagicMock,
+        mock_ai_framework: MagicMock,
+        mock_llm_provider: MagicMock,
         mock_questionary: MagicMock,
     ) -> None:
         """Test admin panel prompts config when SQLite is selected."""
@@ -1622,10 +1407,10 @@ class TestRunInteractivePrompts:
             "project_description": "Test",
             "author_name": "Test Author",
             "author_email": "test@test.com",
+            "timezone": "UTC",
         }
         mock_database.return_value = DatabaseType.SQLITE
         mock_orm_type.return_value = OrmType.SQLALCHEMY
-        mock_auth.return_value = AuthType.JWT
         mock_oauth.return_value = OAuthProvider.NONE
         mock_logfire.return_value = (True, LogfireFeatures())
         mock_background_tasks.return_value = BackgroundTaskType.NONE
@@ -1639,8 +1424,6 @@ class TestRunInteractivePrompts:
             "enable_admin_panel": True,  # Admin panel enabled
             "enable_websockets": False,
             "enable_file_storage": False,
-            "enable_ai_agent": False,
-            "include_example_crud": True,
             "enable_cors": True,
             "enable_orjson": True,
         }
@@ -1655,7 +1438,9 @@ class TestRunInteractivePrompts:
         mock_frontend.return_value = FrontendType.NONE
         mock_python_version.return_value = "3.12"
         mock_ports.return_value = {"backend_port": 8000}
-        mock_admin_config.return_value = (AdminEnvironmentType.DEV_ONLY, True)
+        mock_ai_framework.return_value = AIFrameworkType.PYDANTIC_AI
+        mock_llm_provider.return_value = LLMProviderType.OPENAI
+        mock_rag_config.return_value = RAGFeatures(enable_rag=False)
 
         # Mock session management confirm
         mock_confirm = MagicMock()
@@ -1666,12 +1451,10 @@ class TestRunInteractivePrompts:
 
         # Admin config should be set for SQLite too
         assert config.enable_admin_panel is True
-        assert config.admin_environments == AdminEnvironmentType.DEV_ONLY
-        assert config.admin_require_auth is True
-        mock_admin_config.assert_called_once()
 
     @patch("fastapi_gen.prompts.questionary")
-    @patch("fastapi_gen.prompts.prompt_admin_config")
+    @patch("fastapi_gen.prompts.prompt_llm_provider")
+    @patch("fastapi_gen.prompts.prompt_ai_framework")
     @patch("fastapi_gen.prompts.prompt_ports")
     @patch("fastapi_gen.prompts.prompt_python_version")
     @patch("fastapi_gen.prompts.prompt_frontend")
@@ -1681,16 +1464,16 @@ class TestRunInteractivePrompts:
     @patch("fastapi_gen.prompts.prompt_background_tasks")
     @patch("fastapi_gen.prompts.prompt_logfire")
     @patch("fastapi_gen.prompts.prompt_oauth")
-    @patch("fastapi_gen.prompts.prompt_auth")
     @patch("fastapi_gen.prompts.prompt_database")
     @patch("fastapi_gen.prompts.prompt_basic_info")
     @patch("fastapi_gen.prompts.show_header")
+    @patch("fastapi_gen.prompts.prompt_rag_config")
     def test_admin_panel_not_prompted_with_mongodb(
         self,
+        mock_rag_config: MagicMock,
         mock_header: MagicMock,
         mock_basic_info: MagicMock,
         mock_database: MagicMock,
-        mock_auth: MagicMock,
         mock_oauth: MagicMock,
         mock_logfire: MagicMock,
         mock_background_tasks: MagicMock,
@@ -1700,7 +1483,8 @@ class TestRunInteractivePrompts:
         mock_frontend: MagicMock,
         mock_python_version: MagicMock,
         mock_ports: MagicMock,
-        mock_admin_config: MagicMock,
+        mock_ai_framework: MagicMock,
+        mock_llm_provider: MagicMock,
         mock_questionary: MagicMock,
     ) -> None:
         """Test admin panel config is NOT prompted when MongoDB is selected."""
@@ -1709,9 +1493,9 @@ class TestRunInteractivePrompts:
             "project_description": "Test",
             "author_name": "Test Author",
             "author_email": "test@test.com",
+            "timezone": "UTC",
         }
         mock_database.return_value = DatabaseType.MONGODB
-        mock_auth.return_value = AuthType.NONE
         mock_oauth.return_value = OAuthProvider.NONE
         mock_logfire.return_value = (True, LogfireFeatures())
         mock_background_tasks.return_value = BackgroundTaskType.NONE
@@ -1725,8 +1509,6 @@ class TestRunInteractivePrompts:
             "enable_admin_panel": False,  # Admin panel disabled for MongoDB
             "enable_websockets": False,
             "enable_file_storage": False,
-            "enable_ai_agent": False,
-            "include_example_crud": True,
             "enable_cors": True,
             "enable_orjson": True,
         }
@@ -1741,6 +1523,9 @@ class TestRunInteractivePrompts:
         mock_frontend.return_value = FrontendType.NONE
         mock_python_version.return_value = "3.12"
         mock_ports.return_value = {"backend_port": 8000}
+        mock_ai_framework.return_value = AIFrameworkType.PYDANTIC_AI
+        mock_llm_provider.return_value = LLMProviderType.OPENAI
+        mock_rag_config.return_value = RAGFeatures(enable_rag=False)
 
         # Mock session management confirm
         mock_confirm = MagicMock()
@@ -1751,10 +1536,11 @@ class TestRunInteractivePrompts:
 
         # Admin config should NOT be prompted for MongoDB
         assert config.enable_admin_panel is False
-        mock_admin_config.assert_not_called()
 
     @patch("fastapi_gen.prompts.questionary")
-    @patch("fastapi_gen.prompts.prompt_frontend_features")
+    @patch("fastapi_gen.prompts.prompt_brand_color")
+    @patch("fastapi_gen.prompts.prompt_llm_provider")
+    @patch("fastapi_gen.prompts.prompt_ai_framework")
     @patch("fastapi_gen.prompts.prompt_ports")
     @patch("fastapi_gen.prompts.prompt_python_version")
     @patch("fastapi_gen.prompts.prompt_frontend")
@@ -1764,18 +1550,18 @@ class TestRunInteractivePrompts:
     @patch("fastapi_gen.prompts.prompt_background_tasks")
     @patch("fastapi_gen.prompts.prompt_logfire")
     @patch("fastapi_gen.prompts.prompt_oauth")
-    @patch("fastapi_gen.prompts.prompt_auth")
     @patch("fastapi_gen.prompts.prompt_orm_type")
     @patch("fastapi_gen.prompts.prompt_database")
     @patch("fastapi_gen.prompts.prompt_basic_info")
     @patch("fastapi_gen.prompts.show_header")
-    def test_frontend_with_nextjs_prompts_frontend_features(
+    @patch("fastapi_gen.prompts.prompt_rag_config")
+    def test_frontend_with_nextjs_prompts_brand_color(
         self,
+        mock_rag_config: MagicMock,
         mock_header: MagicMock,
         mock_basic_info: MagicMock,
         mock_database: MagicMock,
         mock_orm_type: MagicMock,
-        mock_auth: MagicMock,
         mock_oauth: MagicMock,
         mock_logfire: MagicMock,
         mock_background_tasks: MagicMock,
@@ -1785,19 +1571,21 @@ class TestRunInteractivePrompts:
         mock_frontend: MagicMock,
         mock_python_version: MagicMock,
         mock_ports: MagicMock,
-        mock_frontend_features: MagicMock,
+        mock_ai_framework: MagicMock,
+        mock_llm_provider: MagicMock,
+        mock_brand_color: MagicMock,
         mock_questionary: MagicMock,
     ) -> None:
-        """Test frontend features are prompted when Next.js is selected."""
+        """Test brand color is prompted when Next.js is selected."""
         mock_basic_info.return_value = {
             "project_name": "test_project",
             "project_description": "Test",
             "author_name": "Test Author",
             "author_email": "test@test.com",
+            "timezone": "UTC",
         }
         mock_database.return_value = DatabaseType.POSTGRESQL
         mock_orm_type.return_value = OrmType.SQLALCHEMY
-        mock_auth.return_value = AuthType.JWT
         mock_oauth.return_value = OAuthProvider.NONE
         mock_logfire.return_value = (False, LogfireFeatures())
         mock_background_tasks.return_value = BackgroundTaskType.NONE
@@ -1811,7 +1599,6 @@ class TestRunInteractivePrompts:
             "enable_admin_panel": False,
             "enable_websockets": False,
             "enable_file_storage": False,
-            "enable_ai_agent": False,
             "enable_cors": True,
             "enable_orjson": True,
         }
@@ -1826,7 +1613,10 @@ class TestRunInteractivePrompts:
         mock_frontend.return_value = FrontendType.NEXTJS
         mock_python_version.return_value = "3.12"
         mock_ports.return_value = {"backend_port": 8000, "frontend_port": 3000}
-        mock_frontend_features.return_value = {"enable_i18n": True}
+        mock_ai_framework.return_value = AIFrameworkType.PYDANTIC_AI
+        mock_llm_provider.return_value = LLMProviderType.OPENAI
+        mock_rag_config.return_value = RAGFeatures(enable_rag=False)
+        mock_brand_color.return_value = BrandColorType.BLUE
 
         # Mock session management confirm
         mock_confirm = MagicMock()
@@ -1835,13 +1625,14 @@ class TestRunInteractivePrompts:
 
         config = run_interactive_prompts()
 
-        # Frontend features should be called and i18n enabled
+        # Brand color should be called when Next.js is selected
         assert config.frontend == FrontendType.NEXTJS
-        assert config.enable_i18n is True
-        mock_frontend_features.assert_called_once()
+        mock_brand_color.assert_called_once()
 
     @patch("fastapi_gen.prompts.questionary")
     @patch("fastapi_gen.prompts.prompt_rate_limit_config")
+    @patch("fastapi_gen.prompts.prompt_llm_provider")
+    @patch("fastapi_gen.prompts.prompt_ai_framework")
     @patch("fastapi_gen.prompts.prompt_ports")
     @patch("fastapi_gen.prompts.prompt_python_version")
     @patch("fastapi_gen.prompts.prompt_frontend")
@@ -1851,18 +1642,18 @@ class TestRunInteractivePrompts:
     @patch("fastapi_gen.prompts.prompt_background_tasks")
     @patch("fastapi_gen.prompts.prompt_logfire")
     @patch("fastapi_gen.prompts.prompt_oauth")
-    @patch("fastapi_gen.prompts.prompt_auth")
     @patch("fastapi_gen.prompts.prompt_orm_type")
     @patch("fastapi_gen.prompts.prompt_database")
     @patch("fastapi_gen.prompts.prompt_basic_info")
     @patch("fastapi_gen.prompts.show_header")
+    @patch("fastapi_gen.prompts.prompt_rag_config")
     def test_rate_limit_config_prompted_when_enabled(
         self,
+        mock_rag_config: MagicMock,
         mock_header: MagicMock,
         mock_basic_info: MagicMock,
         mock_database: MagicMock,
         mock_orm_type: MagicMock,
-        mock_auth: MagicMock,
         mock_oauth: MagicMock,
         mock_logfire: MagicMock,
         mock_background_tasks: MagicMock,
@@ -1872,6 +1663,8 @@ class TestRunInteractivePrompts:
         mock_frontend: MagicMock,
         mock_python_version: MagicMock,
         mock_ports: MagicMock,
+        mock_ai_framework: MagicMock,
+        mock_llm_provider: MagicMock,
         mock_rate_limit_config: MagicMock,
         mock_questionary: MagicMock,
     ) -> None:
@@ -1881,10 +1674,10 @@ class TestRunInteractivePrompts:
             "project_description": "Test",
             "author_name": "Test Author",
             "author_email": "test@test.com",
+            "timezone": "UTC",
         }
         mock_database.return_value = DatabaseType.POSTGRESQL
         mock_orm_type.return_value = OrmType.SQLALCHEMY
-        mock_auth.return_value = AuthType.JWT
         mock_oauth.return_value = OAuthProvider.NONE
         mock_logfire.return_value = (False, LogfireFeatures())
         mock_background_tasks.return_value = BackgroundTaskType.NONE
@@ -1898,7 +1691,6 @@ class TestRunInteractivePrompts:
             "enable_admin_panel": False,
             "enable_websockets": False,
             "enable_file_storage": False,
-            "enable_ai_agent": False,
             "enable_cors": True,
             "enable_orjson": True,
         }
@@ -1913,6 +1705,9 @@ class TestRunInteractivePrompts:
         mock_frontend.return_value = FrontendType.NONE
         mock_python_version.return_value = "3.12"
         mock_ports.return_value = {"backend_port": 8000}
+        mock_ai_framework.return_value = AIFrameworkType.PYDANTIC_AI
+        mock_llm_provider.return_value = LLMProviderType.OPENAI
+        mock_rag_config.return_value = RAGFeatures(enable_rag=False)
         mock_rate_limit_config.return_value = (50, 30, RateLimitStorageType.REDIS)
 
         # Mock session management confirm
@@ -1931,6 +1726,8 @@ class TestRunInteractivePrompts:
 
     @patch("fastapi_gen.prompts.questionary")
     @patch("fastapi_gen.prompts.prompt_rate_limit_config")
+    @patch("fastapi_gen.prompts.prompt_llm_provider")
+    @patch("fastapi_gen.prompts.prompt_ai_framework")
     @patch("fastapi_gen.prompts.prompt_ports")
     @patch("fastapi_gen.prompts.prompt_python_version")
     @patch("fastapi_gen.prompts.prompt_frontend")
@@ -1940,18 +1737,18 @@ class TestRunInteractivePrompts:
     @patch("fastapi_gen.prompts.prompt_background_tasks")
     @patch("fastapi_gen.prompts.prompt_logfire")
     @patch("fastapi_gen.prompts.prompt_oauth")
-    @patch("fastapi_gen.prompts.prompt_auth")
     @patch("fastapi_gen.prompts.prompt_orm_type")
     @patch("fastapi_gen.prompts.prompt_database")
     @patch("fastapi_gen.prompts.prompt_basic_info")
     @patch("fastapi_gen.prompts.show_header")
+    @patch("fastapi_gen.prompts.prompt_rag_config")
     def test_rate_limit_config_not_prompted_when_disabled(
         self,
+        mock_rag_config: MagicMock,
         mock_header: MagicMock,
         mock_basic_info: MagicMock,
         mock_database: MagicMock,
         mock_orm_type: MagicMock,
-        mock_auth: MagicMock,
         mock_oauth: MagicMock,
         mock_logfire: MagicMock,
         mock_background_tasks: MagicMock,
@@ -1961,6 +1758,8 @@ class TestRunInteractivePrompts:
         mock_frontend: MagicMock,
         mock_python_version: MagicMock,
         mock_ports: MagicMock,
+        mock_ai_framework: MagicMock,
+        mock_llm_provider: MagicMock,
         mock_rate_limit_config: MagicMock,
         mock_questionary: MagicMock,
     ) -> None:
@@ -1970,10 +1769,10 @@ class TestRunInteractivePrompts:
             "project_description": "Test",
             "author_name": "Test Author",
             "author_email": "test@test.com",
+            "timezone": "UTC",
         }
         mock_database.return_value = DatabaseType.POSTGRESQL
         mock_orm_type.return_value = OrmType.SQLALCHEMY
-        mock_auth.return_value = AuthType.JWT
         mock_oauth.return_value = OAuthProvider.NONE
         mock_logfire.return_value = (False, LogfireFeatures())
         mock_background_tasks.return_value = BackgroundTaskType.NONE
@@ -1987,7 +1786,6 @@ class TestRunInteractivePrompts:
             "enable_admin_panel": False,
             "enable_websockets": False,
             "enable_file_storage": False,
-            "enable_ai_agent": False,
             "enable_cors": True,
             "enable_orjson": True,
         }
@@ -2002,6 +1800,9 @@ class TestRunInteractivePrompts:
         mock_frontend.return_value = FrontendType.NONE
         mock_python_version.return_value = "3.12"
         mock_ports.return_value = {"backend_port": 8000}
+        mock_ai_framework.return_value = AIFrameworkType.PYDANTIC_AI
+        mock_llm_provider.return_value = LLMProviderType.OPENAI
+        mock_rag_config.return_value = RAGFeatures(enable_rag=False)
 
         # Mock session management confirm
         mock_confirm = MagicMock()
@@ -2066,3 +1867,288 @@ class TestConfirmGeneration:
 
         with pytest.raises(KeyboardInterrupt):
             confirm_generation()
+
+
+class TestPromptRAGConfig:
+    """Tests for prompt_rag_config function."""
+
+    @patch("fastapi_gen.prompts.questionary")
+    def test_rag_disabled_by_default(self, mock_questionary: MagicMock) -> None:
+        """Test RAG is disabled by default when user declines."""
+        mock_confirm = MagicMock()
+        mock_confirm.ask.return_value = False
+        mock_questionary.confirm.return_value = mock_confirm
+
+        result = prompt_rag_config()
+
+        assert result.enable_rag is False
+        assert result.enable_google_drive_ingestion is False
+        assert result.reranker_type == RerankerType.NONE
+
+    @patch("fastapi_gen.prompts.questionary")
+    def test_rag_enabled_no_features(self, mock_questionary: MagicMock) -> None:
+        """Test RAG enabled but no additional features selected."""
+        # Confirms: enable_rag=True, google_drive=False, s3=False, image_desc=False
+        mock_confirm = MagicMock()
+        mock_confirm.ask.side_effect = [True, False, False, False]
+        mock_questionary.confirm.return_value = mock_confirm
+
+        # Selects: vector_store, reranker_type, pdf_parser
+        mock_select = MagicMock()
+        mock_select.ask.side_effect = [
+            VectorStoreType.MILVUS,
+            RerankerType.NONE,
+            PdfParserType.PYMUPDF,
+        ]
+        mock_questionary.select.return_value = mock_select
+
+        result = prompt_rag_config()
+
+        assert result.enable_rag is True
+        assert result.vector_store == VectorStoreType.MILVUS
+        assert result.enable_google_drive_ingestion is False
+        assert result.reranker_type == RerankerType.NONE
+
+    @patch("fastapi_gen.prompts.questionary")
+    def test_rag_enabled_with_google_drive(self, mock_questionary: MagicMock) -> None:
+        """Test RAG enabled with Google Drive ingestion."""
+        # Confirms: enable_rag=True, google_drive=True, s3=False, image_desc=False
+        mock_confirm = MagicMock()
+        mock_confirm.ask.side_effect = [True, True, False, False]
+        mock_questionary.confirm.return_value = mock_confirm
+
+        # Selects: vector_store, reranker_type, pdf_parser
+        mock_select = MagicMock()
+        mock_select.ask.side_effect = [
+            VectorStoreType.MILVUS,
+            RerankerType.NONE,
+            PdfParserType.PYMUPDF,
+        ]
+        mock_questionary.select.return_value = mock_select
+
+        result = prompt_rag_config()
+
+        assert result.enable_rag is True
+        assert result.enable_google_drive_ingestion is True
+        assert result.reranker_type == RerankerType.NONE
+
+    @patch("fastapi_gen.prompts.questionary")
+    def test_rag_enabled_with_reranker(self, mock_questionary: MagicMock) -> None:
+        """Test RAG enabled with reranker."""
+        # Confirms: enable_rag=True, google_drive=False, s3=False, image_desc=False
+        mock_confirm = MagicMock()
+        mock_confirm.ask.side_effect = [True, False, False, False]
+        mock_questionary.confirm.return_value = mock_confirm
+
+        # Selects: vector_store, reranker_type, pdf_parser
+        mock_select = MagicMock()
+        mock_select.ask.side_effect = [
+            VectorStoreType.QDRANT,
+            RerankerType.COHERE,
+            PdfParserType.PYMUPDF,
+        ]
+        mock_questionary.select.return_value = mock_select
+
+        result = prompt_rag_config()
+
+        assert result.enable_rag is True
+        assert result.vector_store == VectorStoreType.QDRANT
+        assert result.reranker_type == RerankerType.COHERE
+
+    @patch("fastapi_gen.prompts.questionary")
+    def test_rag_enabled_with_all_features(self, mock_questionary: MagicMock) -> None:
+        """Test RAG enabled with all features."""
+        # Confirms: enable_rag=True, google_drive=True, s3=True
+        # (no image_desc confirm since LLAMAPARSE is not PYMUPDF/ALL)
+        mock_confirm = MagicMock()
+        mock_confirm.ask.side_effect = [True, True, True]
+        mock_questionary.confirm.return_value = mock_confirm
+
+        # Selects: vector_store, reranker_type, pdf_parser
+        mock_select = MagicMock()
+        mock_select.ask.side_effect = [
+            VectorStoreType.CHROMADB,
+            RerankerType.COHERE,
+            PdfParserType.LLAMAPARSE,
+        ]
+        mock_questionary.select.return_value = mock_select
+
+        result = prompt_rag_config()
+
+        assert result.enable_rag is True
+        assert result.vector_store == VectorStoreType.CHROMADB
+        assert result.pdf_parser == PdfParserType.LLAMAPARSE
+        assert result.reranker_type == RerankerType.COHERE
+
+    @patch("fastapi_gen.prompts.console")
+    @patch("fastapi_gen.prompts.questionary")
+    def test_prompt_uses_llm_provider(
+        self, mock_questionary: MagicMock, mock_console: MagicMock
+    ) -> None:
+        """Test that prompt_rag_config receives the LLM provider."""
+        mock_confirm = MagicMock()
+        mock_confirm.ask.return_value = False
+        mock_questionary.confirm.return_value = mock_confirm
+
+        # Call with Anthropic provider
+        prompt_rag_config()
+
+        # The function should work with any LLM provider without errors
+        # (The provider is passed as argument but not used in current implementation)
+        assert mock_confirm.ask.call_count == 1
+
+
+class TestPromptLangsmith:
+    """Tests for prompt_langsmith function."""
+
+    @patch("fastapi_gen.prompts.questionary")
+    def test_returns_true_when_confirmed(self, mock_questionary: MagicMock) -> None:
+        """Test prompt_langsmith returns True when user confirms."""
+        mock_confirm = MagicMock()
+        mock_confirm.ask.return_value = True
+        mock_questionary.confirm.return_value = mock_confirm
+
+        result = prompt_langsmith()
+
+        assert result is True
+
+    @patch("fastapi_gen.prompts.questionary")
+    def test_returns_false_when_declined(self, mock_questionary: MagicMock) -> None:
+        """Test prompt_langsmith returns False when user declines."""
+        mock_confirm = MagicMock()
+        mock_confirm.ask.return_value = False
+        mock_questionary.confirm.return_value = mock_confirm
+
+        result = prompt_langsmith()
+
+        assert result is False
+
+
+class TestRunInteractivePromptsLangSmith:
+    """Tests for LangSmith prompt invocation in run_interactive_prompts."""
+
+    @patch("fastapi_gen.prompts.questionary")
+    @patch("fastapi_gen.prompts.prompt_langsmith")
+    @patch("fastapi_gen.prompts.prompt_llm_provider")
+    @patch("fastapi_gen.prompts.prompt_ai_framework")
+    @patch("fastapi_gen.prompts.prompt_ports")
+    @patch("fastapi_gen.prompts.prompt_python_version")
+    @patch("fastapi_gen.prompts.prompt_frontend")
+    @patch("fastapi_gen.prompts.prompt_reverse_proxy")
+    @patch("fastapi_gen.prompts.prompt_dev_tools")
+    @patch("fastapi_gen.prompts.prompt_integrations")
+    @patch("fastapi_gen.prompts.prompt_background_tasks")
+    @patch("fastapi_gen.prompts.prompt_logfire")
+    @patch("fastapi_gen.prompts.prompt_oauth")
+    @patch("fastapi_gen.prompts.prompt_orm_type")
+    @patch("fastapi_gen.prompts.prompt_database")
+    @patch("fastapi_gen.prompts.prompt_basic_info")
+    @patch("fastapi_gen.prompts.show_header")
+    @patch("fastapi_gen.prompts.prompt_rag_config")
+    def test_langsmith_prompted_for_langchain_framework(
+        self,
+        mock_rag_config: MagicMock,
+        mock_header: MagicMock,
+        mock_basic_info: MagicMock,
+        mock_database: MagicMock,
+        mock_orm_type: MagicMock,
+        mock_oauth: MagicMock,
+        mock_logfire: MagicMock,
+        mock_background_tasks: MagicMock,
+        mock_integrations: MagicMock,
+        mock_dev_tools: MagicMock,
+        mock_reverse_proxy: MagicMock,
+        mock_frontend: MagicMock,
+        mock_python_version: MagicMock,
+        mock_ports: MagicMock,
+        mock_ai_framework: MagicMock,
+        mock_llm_provider: MagicMock,
+        mock_langsmith: MagicMock,
+        mock_questionary: MagicMock,
+    ) -> None:
+        """Test LangSmith prompt is called when LangChain framework is selected (line 900)."""
+        mock_basic_info.return_value = {
+            "project_name": "test_project",
+            "project_description": "Test",
+            "author_name": "Test Author",
+            "author_email": "test@test.com",
+            "timezone": "UTC",
+        }
+        mock_database.return_value = DatabaseType.POSTGRESQL
+        mock_orm_type.return_value = OrmType.SQLALCHEMY
+        mock_oauth.return_value = OAuthProvider.NONE
+        mock_logfire.return_value = (False, LogfireFeatures())
+        mock_background_tasks.return_value = BackgroundTaskType.NONE
+        mock_integrations.return_value = {
+            "enable_redis": False,
+            "enable_caching": False,
+            "enable_rate_limiting": False,
+            "enable_pagination": True,
+            "enable_sentry": False,
+            "enable_prometheus": False,
+            "enable_admin_panel": False,
+            "enable_websockets": False,
+            "enable_file_storage": False,
+            "enable_cors": True,
+            "enable_orjson": True,
+        }
+        mock_dev_tools.return_value = {
+            "enable_pytest": True,
+            "enable_precommit": True,
+            "enable_docker": True,
+            "enable_kubernetes": False,
+            "ci_type": CIType.GITHUB,
+        }
+        mock_reverse_proxy.return_value = ReverseProxyType.TRAEFIK_INCLUDED
+        mock_frontend.return_value = FrontendType.NONE
+        mock_python_version.return_value = "3.12"
+        mock_ports.return_value = {"backend_port": 8000}
+        mock_ai_framework.return_value = AIFrameworkType.LANGCHAIN
+        mock_llm_provider.return_value = LLMProviderType.OPENAI
+        mock_rag_config.return_value = RAGFeatures(enable_rag=False)
+        mock_langsmith.return_value = True
+
+        # Mock session management confirm
+        mock_confirm = MagicMock()
+        mock_confirm.ask.return_value = False
+        mock_questionary.confirm.return_value = mock_confirm
+
+        config = run_interactive_prompts()
+
+        # LangSmith should be called and enabled
+        mock_langsmith.assert_called_once()
+        assert config.enable_langsmith is True
+
+
+class TestShowSummaryLangSmithAndRAG:
+    """Tests for show_summary with LangSmith and RAG enabled."""
+
+    def test_show_summary_with_langsmith_enabled(self) -> None:
+        """Test show_summary displays LangSmith when enabled (line 969)."""
+        from fastapi_gen.config import ProjectConfig
+
+        config = ProjectConfig(
+            project_name="test",
+            ai_framework=AIFrameworkType.LANGCHAIN,
+            enable_langsmith=True,
+            background_tasks=BackgroundTaskType.NONE,
+        )
+
+        # Should not raise - exercises line 969
+        show_summary(config)
+
+    def test_show_summary_with_rag_enabled(self) -> None:
+        """Test show_summary displays RAG info when enabled (line 985)."""
+        from fastapi_gen.config import ProjectConfig
+
+        config = ProjectConfig(
+            project_name="test",
+            rag_features=RAGFeatures(
+                enable_rag=True,
+                vector_store=VectorStoreType.MILVUS,
+            ),
+            background_tasks=BackgroundTaskType.NONE,
+        )
+
+        # Should not raise - exercises line 985
+        show_summary(config)

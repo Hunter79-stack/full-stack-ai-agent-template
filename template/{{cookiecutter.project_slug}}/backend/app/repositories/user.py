@@ -5,6 +5,7 @@ Contains only database operations. Business logic (password hashing,
 validation) is handled by UserService in app/services/user.py.
 """
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -54,7 +55,6 @@ async def create(
     hashed_password: str | None,
     full_name: str | None = None,
     is_active: bool = True,
-    is_superuser: bool = False,
     role: str = "user",
 {%- if cookiecutter.enable_oauth %}
     oauth_provider: str | None = None,
@@ -70,7 +70,6 @@ async def create(
         hashed_password=hashed_password,
         full_name=full_name,
         is_active=is_active,
-        is_superuser=is_superuser,
         role=role,
 {%- if cookiecutter.enable_oauth %}
         oauth_provider=oauth_provider,
@@ -87,7 +86,7 @@ async def update(
     db: AsyncSession,
     *,
     db_user: User,
-    update_data: dict,
+    update_data: dict[str, Any],
 ) -> User:
     """Update a user.
 
@@ -100,6 +99,17 @@ async def update(
     await db.flush()
     await db.refresh(db_user)
     return db_user
+
+
+async def update_avatar(db: AsyncSession, user_id: UUID, avatar_url: str) -> User:
+    """Update a user's avatar URL."""
+    user = await db.get(User, user_id)
+    if user is None:
+        raise ValueError(f"User {user_id} not found")
+    user.avatar_url = avatar_url
+    await db.flush()
+    await db.refresh(user)
+    return user
 
 
 async def delete(db: AsyncSession, user_id: UUID) -> User | None:
@@ -117,6 +127,8 @@ async def delete(db: AsyncSession, user_id: UUID) -> User | None:
 Contains only database operations. Business logic (password hashing,
 validation) is handled by UserService in app/services/user.py.
 """
+
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -165,7 +177,6 @@ def create(
     hashed_password: str | None,
     full_name: str | None = None,
     is_active: bool = True,
-    is_superuser: bool = False,
     role: str = "user",
 {%- if cookiecutter.enable_oauth %}
     oauth_provider: str | None = None,
@@ -181,7 +192,6 @@ def create(
         hashed_password=hashed_password,
         full_name=full_name,
         is_active=is_active,
-        is_superuser=is_superuser,
         role=role,
 {%- if cookiecutter.enable_oauth %}
         oauth_provider=oauth_provider,
@@ -198,7 +208,7 @@ def update(
     db: Session,
     *,
     db_user: User,
-    update_data: dict,
+    update_data: dict[str, Any],
 ) -> User:
     """Update a user.
 
@@ -228,6 +238,8 @@ def delete(db: Session, user_id: str) -> User | None:
 Contains only database operations. Business logic (password hashing,
 validation) is handled by UserService in app/services/user.py.
 """
+
+from typing import Any
 
 from app.db.models.user import User
 
@@ -266,7 +278,6 @@ async def create(
     hashed_password: str | None,
     full_name: str | None = None,
     is_active: bool = True,
-    is_superuser: bool = False,
     role: str = "user",
 {%- if cookiecutter.enable_oauth %}
     oauth_provider: str | None = None,
@@ -282,7 +293,6 @@ async def create(
         hashed_password=hashed_password,
         full_name=full_name,
         is_active=is_active,
-        is_superuser=is_superuser,
         role=role,
 {%- if cookiecutter.enable_oauth %}
         oauth_provider=oauth_provider,
@@ -296,7 +306,7 @@ async def create(
 async def update(
     *,
     db_user: User,
-    update_data: dict,
+    update_data: dict[str, Any],
 ) -> User:
     """Update a user.
 

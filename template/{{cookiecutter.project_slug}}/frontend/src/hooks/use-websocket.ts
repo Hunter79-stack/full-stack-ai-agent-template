@@ -43,7 +43,7 @@ export function useWebSocket({
   }, [onMessage, onOpen, onClose, onError]);
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) return;
 
     const ws = new WebSocket(url);
     wsRef.current = ws;

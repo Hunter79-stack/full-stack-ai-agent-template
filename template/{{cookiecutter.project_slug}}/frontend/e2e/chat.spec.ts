@@ -1,4 +1,4 @@
-{%- if cookiecutter.use_frontend and cookiecutter.enable_ai_agent %}
+{%- if cookiecutter.use_frontend %}
 import { test, expect } from "@playwright/test";
 
 test.describe("AI Chat", () => {
@@ -160,7 +160,6 @@ test.describe("AI Chat", () => {
   });
 });
 
-{%- if cookiecutter.enable_conversation_persistence %}
 test.describe("Conversation Persistence", () => {
 {%- if cookiecutter.use_jwt %}
   test.use({
@@ -192,7 +191,6 @@ test.describe("Conversation Persistence", () => {
     }
   });
 });
-{%- endif %}
 {%- elif cookiecutter.use_frontend %}
 import { test, expect } from "@playwright/test";
 
