@@ -297,6 +297,12 @@ known-first-party = ["app", "cli"]
 [tool.ty.environment]
 python-version = "3.11"
 
+[tool.ty.src]
+exclude = [
+    "alembic/",
+    "tests/",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
