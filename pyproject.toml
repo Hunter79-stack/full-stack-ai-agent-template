@@ -134,13 +134,14 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 
-[tool.ty]
+[tool.ty.environment]
 python-version = "3.11"
 
 [tool.ty.src]
-# Exclude Jinja2 template files
+# Exclude Jinja2 template files and integration tests with dynamic imports
 exclude = [
     "template/",
+    "tests/",
 ]
 
 [tool.pytest.ini_options]

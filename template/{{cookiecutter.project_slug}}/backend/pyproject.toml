@@ -294,7 +294,7 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["app", "cli"]
 
-[tool.ty]
+[tool.ty.environment]
 python-version = "3.11"
 
 [tool.pytest.ini_options]
